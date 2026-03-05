@@ -121,10 +121,10 @@
                         <h3 class="text-xl font-serif font-bold">Nueva cuenta</h3>
                     </div>
                     <div>
-                        <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Tu nombre</label>
-                        <input type="text" id="auth-name" class="input-field" placeholder="Ej: María García">
-                        <p class="text-xs opacity-40 mt-1 px-1">Así te reconoceremos en el horno 👋</p>
-                    </div>
+							    <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Tu nombre <span class="opacity-40 normal-case font-normal">(opcional)</span></label>
+							    <input type="text" id="auth-name" class="input-field" placeholder="Ej: María García">
+							    <p class="text-xs opacity-40 mt-1 px-1">Si lo dejas en blanco te lo preguntaremos después 👋</p>
+						  </div>
                     <div>
                         <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Email de contacto</label>
                         <input type="email" id="auth-email-reg" class="input-field" placeholder="tuemail@ejemplo.com">
@@ -508,34 +508,36 @@
         };
 
         // ── FIX: Registro sin confirmación de email ───────────────────
-        window.handleRegister = async () => {
-            const name  = document.getElementById('auth-name').value.trim();
-            const email = document.getElementById('auth-email-reg').value.trim();
-            const pass  = document.getElementById('auth-password-reg').value;
-            const err   = document.getElementById('auth-error');
-            err.classList.add('hidden');
+				window.handleRegister = async () => {
+				    const name  = document.getElementById('auth-name').value.trim();  // puede estar vacío
+				    const email = document.getElementById('auth-email-reg').value.trim();
+				    const pass  = document.getElementById('auth-password-reg').value;
+				    const err   = document.getElementById('auth-error');
+				    err.classList.add('hidden');
+				
+				    if (!email)           { err.textContent = "Escribe tu email.";                err.classList.remove('hidden'); return; }
+				    if (pass?.length < 6) { err.textContent = "El pin debe tener 6 caracteres."; err.classList.remove('hidden'); return; }
+				    // ← nombre ya NO es obligatorio
+				
+				    try {
+				        const { data, error } = await supabase.auth.signUp({ email, password: pass });
+				        if (error) throw error;
+				
+				        if (name) {
+				            // Solo guardamos en localStorage si introdujo nombre
+				            localStorage.setItem('pending_display_name', name);
+				            if (data?.user?.id) {
+				                await supabase.from('profiles').upsert({ id: data.user.id, display_name: name });
+				            }
+				        }
+				        // Si no puso nombre, el modal se lo preguntará al entrar
+				
+				        showMessage(name ? `¡Bienvenido/a, ${name}! 🥐` : `¡Cuenta creada! Ahora entra con tus datos.`);
+				        window.showLoginForm();
+				
+				    } catch(e) { err.textContent = e.message; err.classList.remove('hidden'); }
+				};
 
-            if (!name)            { err.textContent = "Escribe tu nombre.";               err.classList.remove('hidden'); return; }
-            if (!email)           { err.textContent = "Escribe tu email.";                err.classList.remove('hidden'); return; }
-            if (pass?.length < 6) { err.textContent = "El pin debe tener 6 caracteres."; err.classList.remove('hidden'); return; }
-
-            try {
-                const { data, error } = await supabase.auth.signUp({ email, password: pass });
-                if (error) throw error;
-
-                // Guardar nombre en localStorage como red de seguridad
-                localStorage.setItem('pending_display_name', name);
-
-                // Intentar crear el perfil directamente (funciona si no hay delay de Auth)
-                if (data?.user?.id) {
-                    await supabase.from('profiles').upsert({ id: data.user.id, display_name: name });
-                }
-
-                showMessage(`¡Bienvenido/a, ${name}! 🥐`);
-                window.showLoginForm();
-
-            } catch(e) { err.textContent = e.message; err.classList.remove('hidden'); }
-        };
 
         window.handleLogout = () => supabase.auth.signOut();
 
@@ -555,58 +557,57 @@
         }
 
         // ── FIX: updateUserState rescata nombre pendiente de registro ─
-        async function updateUserState(user) {
-            currentUser = user;
-            isAdmin = user?.email === ADMIN_EMAIL;
-
-            document.getElementById('nav-user').classList.toggle('hidden', !user);
-            document.getElementById('view-auth').classList.toggle('hidden', !!user);
-            document.getElementById('view-admin').classList.toggle('hidden', !isAdmin);
-            document.getElementById('view-user').classList.toggle('hidden', !user || isAdmin);
-
-            if (user) {
-                // Red de seguridad: si quedó nombre pendiente del registro, guardarlo ahora
-                const pendingName = localStorage.getItem('pending_display_name');
-                if (pendingName) {
-                    localStorage.removeItem('pending_display_name');
-                    const { error: pe } = await supabase
-                        .from('profiles')
-                        .upsert({ id: user.id, display_name: pendingName });
-                    if (!pe) {
-                        currentProfile = pendingName;
-                        updateNavUser(pendingName);
-                        if (!isAdmin) {
-                            const t = document.getElementById('user-welcome-title');
-                            if (t) t.textContent = `¡Hola, ${pendingName}!`;
-                        }
-                        isAdmin ? fetchAdminData() : fetchUserData();
-                        subscribeToChanges();
-                        lucide.createIcons();
-                        return;
-                    }
-                }
-
-                // Flujo normal de login
-                const displayName = await loadProfile(user.id);
-                currentProfile = displayName;
-                const needsName = !isAdmin && isPlaceholderName(displayName, user.email);
-
-                if (needsName) {
-                    updateNavUser(emailPrefix(user.email));
-                    askForName();
-                } else {
-                    const name = displayName || emailPrefix(user.email);
-                    updateNavUser(name);
-                    if (!isAdmin) {
-                        const t = document.getElementById('user-welcome-title');
-                        if (t) t.textContent = `¡Hola, ${name}!`;
-                    }
-                }
-                isAdmin ? fetchAdminData() : fetchUserData();
-                subscribeToChanges();
-            }
-            lucide.createIcons();
-        }
+			async function updateUserState(user) {
+			    currentUser = user;
+			    isAdmin = user?.email === ADMIN_EMAIL;
+			
+			    document.getElementById('nav-user').classList.toggle('hidden', !user);
+			    document.getElementById('view-auth').classList.toggle('hidden', !!user);
+			    document.getElementById('view-admin').classList.toggle('hidden', !isAdmin);
+			    document.getElementById('view-user').classList.toggle('hidden', !user || isAdmin);
+			
+			    if (user) {
+			        // Red de seguridad: nombre pendiente del registro
+			        const pendingName = localStorage.getItem('pending_display_name');
+			        if (pendingName) {
+			            localStorage.removeItem('pending_display_name');
+			            const { error: pe } = await supabase
+			                .from('profiles')
+			                .upsert({ id: user.id, display_name: pendingName });
+			            if (!pe) {
+			                currentProfile = pendingName;
+			                updateNavUser(pendingName);
+			                if (!isAdmin) {
+			                    const t = document.getElementById('user-welcome-title');
+			                    if (t) t.textContent = `¡Hola, ${pendingName}!`;
+			                }
+			                isAdmin ? fetchAdminData() : fetchUserData();
+			                subscribeToChanges();
+			                lucide.createIcons();
+			                return;
+			            }
+			        }
+			
+			        const displayName = await loadProfile(user.id);
+			        currentProfile = displayName;
+			        const needsName = !isAdmin && isPlaceholderName(displayName, user.email);
+			
+			        if (needsName) {
+			            updateNavUser(emailPrefix(user.email));
+			            askForName();
+			        } else {
+			            const name = displayName || emailPrefix(user.email);
+			            updateNavUser(name);
+			            if (!isAdmin) {
+			                const t = document.getElementById('user-welcome-title');
+			                if (t) t.textContent = `¡Hola, ${name}!`;
+			            }
+			        }
+			        isAdmin ? fetchAdminData() : fetchUserData();
+			        subscribeToChanges();
+			    }
+			    lucide.createIcons();
+			}
 
         // ── Datos ─────────────────────────────────────────────────────
         async function fetchAdminData() {
