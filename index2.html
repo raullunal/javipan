@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Horno Artesano - Gestión Económica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        bread: { 
+                            50: '#FCF9F5',  // Harina
+                            100: '#F5EFE6', // Miga
+                            200: '#EADDCF', // Miga madura
+                            700: '#945D31', // Corteza
+                            800: '#6F4422', // Corteza oscura
+                            900: '#4A2F1B'  // Café
+                        },
+                        accent: '#E67E22'
+                    },
+                    borderRadius: { xl:'1.25rem','2xl':'1.75rem','3xl':'2.5rem' }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            transition: background-color 0.3s, color 0.3s; 
+            background-image: radial-gradient(#EADDCF 0.5px, transparent 0.5px); 
+            background-size: 24px 24px; 
+        }
+        
+        h1, h2, h3, .font-serif { font-family: 'Instrument Serif', serif; }
+
+        .dark body { 
+            background-color: #261E1A; 
+            color: #F3E5D8; 
+            background-image: radial-gradient(#3D2F27 0.5px, transparent 0.5px);
+        }
+
+        /* Hero Header con difuminado */
+        .hero-header {
+            position: relative;
+            height: 450px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .hero-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            /* Imagen de pan integral rústico con semillas y harina */
+            background-image: url('pan2.jpg?q=80&w=2000&auto=format&fit=crop');
+            background-position: center;
+        }
+
+        .hero-gradient {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(38, 30, 26, 0.2) 0%, rgba(252, 249, 245, 1) 95%);
+        }
+
+        .dark .hero-gradient {
+            background: linear-gradient(to bottom, rgba(38, 30, 26, 0.2) 0%, #261E1A 95%);
+        }
+
+        .bread-card { 
+            background: rgba(255, 255, 255, 0.85); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid #EADDCF; 
+            border-radius: 2rem; 
+            transition: transform 0.2s ease, box-shadow 0.2s ease; 
+        }
+        
+        .dark .bread-card { background: rgba(42, 34, 29, 0.85); border-color: #5D4037; }
+        
+        .input-field { border: 1px solid #EADDCF; border-radius: 1rem; padding: 0.85rem; width: 100%; background: white; transition: border-color 0.2s; }
+        .input-field:focus { outline: none; border-color: #945D31; box-shadow: 0 0 0 2px rgba(148, 93, 49, 0.1); }
+        .dark .input-field { background: #3d2f27; border-color: #5d4037; color: #f3e5d8; }
+        
+        .btn-primary { background: linear-gradient(135deg, #945D31 0%, #6F4422 100%); color: white; box-shadow: 0 4px 15px rgba(111, 68, 34, 0.3); transition: all 0.2s; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(111, 68, 34, 0.4); }
+        
+        .loading-overlay { position: fixed; inset: 0; background: #FCF9F5; display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .dark .loading-overlay { background: #261E1A; }
+        
+        .modal-animate { animation: modalEnter 0.3s ease-out; }
+        @keyframes modalEnter { from{opacity:0;transform:scale(0.95) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
+        
+        .badge-bizum    { background: #e8f5e9; color: #2e7d32; }
+        .badge-metalico { background: #fff3e0; color: #e65100; }
+        .badge-pendiente{ background: #fce4ec; color: #c62828; }
+
+        .print-page { background:white; padding:40px; font-family:sans-serif; color:#000; }
+        .print-header { text-align:center; margin-bottom:30px; border-bottom:3px solid #945D31; padding-bottom:20px; }
+        .print-table { width:100%; border-collapse:collapse; margin-top:20px; }
+        .print-table th { background-color:#EADDCF; padding:12px 8px; text-align:left; font-weight:700; border:1px solid #945D31; }
+        .print-table td { padding:10px 8px; border:1px solid #ddd; }
+        
+        details > summary { list-style:none; cursor:pointer; }
+        details[open] .chevron-icon { transform:rotate(180deg); }
+        .chevron-icon { transition:transform 0.2s; }
+    </style>
+</head>
+<body class="bg-bread-50 text-bread-900 dark:bg-[#261E1A] dark:text-[#F3E5D8]">
+
+    <div id="loading" class="loading-overlay">
+        <div class="text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" class="w-20 h-20 text-bread-700 animate-pulse mx-auto mb-4">
+              <path d="M232,104a64.14,64.14,0,0,0-36.56-57.94C188.46,43.23,178.6,40,168,40H88c-10.6,0-20.46,3.23-27.44,6.06A64.14,64.14,0,0,0,24,104v32a16,16,0,0,0,16,16h8v48a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V152h8a16,16,0,0,0,16-16ZM66.42,54.76C72,52.44,80.12,48,88,48H168c7.88,0,16,4.44,21.58,6.76A48.09,48.09,0,0,1,216,104H40A48.09,48.09,0,0,1,66.42,54.76ZM192,200H64V152H192ZM216,136H40V120H216Z"></path>
+            </svg>
+            <p class="font-serif italic text-2xl">Atemperando el horno...</p>
+        </div>
+    </div>
+
+    <!-- Hero Header -->
+    <div class="hero-header">
+        <div class="hero-image"></div>
+        <div class="hero-gradient"></div>
+        <div class="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+            <div class="bg-bread-700 p-4 rounded-3xl shadow-2xl mb-6 transform -rotate-3">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" class="text-white w-12 h-12">
+                  <path d="M232,104a64.14,64.14,0,0,0-36.56-57.94C188.46,43.23,178.6,40,168,40H88c-10.6,0-20.46,3.23-27.44,6.06A64.14,64.14,0,0,0,24,104v32a16,16,0,0,0,16,16h8v48a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V152h8a16,16,0,0,0,16-16ZM66.42,54.76C72,52.44,80.12,48,88,48H168c7.88,0,16,4.44,21.58,6.76A48.09,48.09,0,0,1,216,104H40A48.09,48.09,0,0,1,66.42,54.76ZM192,200H64V152H192ZM216,136H40V120H216Z"></path>
+                </svg>
+            </div>
+            <h1 class="text-5xl md:text-7xl font-serif font-bold italic text-bread-900 dark:text-white drop-shadow-sm">El Horno Artesano</h1>
+            <p class="text-lg md:text-xl font-medium text-bread-700 dark:text-bread-200 mt-2 tracking-widest uppercase">Gestión de Obrador</p>
+        </div>
+    </div>
+
+    <nav class="sticky top-0 z-40 p-6 flex justify-between items-center max-w-6xl mx-auto -mt-10">
+        <div class="flex items-center gap-3 bg-white/50 dark:bg-black/20 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" class="text-bread-700 w-5 h-5">
+              <path d="M232,104a64.14,64.14,0,0,0-36.56-57.94C188.46,43.23,178.6,40,168,40H88c-10.6,0-20.46,3.23-27.44,6.06A64.14,64.14,0,0,0,24,104v32a16,16,0,0,0,16,16h8v48a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V152h8a16,16,0,0,0,16-16ZM66.42,54.76C72,52.44,80.12,48,88,48H168c7.88,0,16,4.44,21.58,6.76A48.09,48.09,0,0,1,216,104H40A48.09,48.09,0,0,1,66.42,54.76ZM192,200H64V152H192ZM216,136H40V120H216Z"></path>
+            </svg>
+            <span class="font-serif font-bold italic text-xl">Artesano</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <button onclick="window.toggleTheme()" class="p-3 rounded-2xl bg-white dark:bg-bread-900 border border-bread-200 dark:border-bread-800 shadow-sm transition-all hover:scale-110">
+                <i data-lucide="sun"  id="theme-icon-light" class="w-5 h-5 hidden text-yellow-500"></i>
+                <i data-lucide="moon" id="theme-icon-dark"  class="w-5 h-5 text-bread-700"></i>
+            </button>
+            <div id="nav-user" class="hidden flex items-center gap-4 bg-white/80 dark:bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-bread-200 dark:border-bread-800 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <div id="user-avatar" class="w-8 h-8 bg-bread-700 rounded-full flex items-center justify-center text-white text-xs font-black">?</div>
+                    <span id="user-display" class="hidden md:inline text-sm font-bold opacity-80 tracking-wide"></span>
+                </div>
+                <button onclick="window.handleLogout()" class="text-xs font-black text-bread-700 hover:text-red-500 transition-colors uppercase">Salir</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto p-4 pb-20 relative z-10">
+
+        <!-- Auth -->
+        <section id="view-auth" class="hidden mt-10 max-w-md mx-auto">
+            <div class="bread-card p-10 shadow-2xl border-t-4 border-t-bread-700">
+                <div id="auth-login-form" class="space-y-5">
+                    <div class="text-center mb-6">
+                        <h2 class="text-3xl font-serif font-bold">Bienvenido</h2>
+                        <p class="text-sm opacity-60">Accede para gestionar tus pedidos</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Email</label>
+                        <input type="email" id="auth-email" class="input-field" placeholder="tu@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Pin (6 carac.)</label>
+                        <input type="password" id="auth-password" class="input-field" maxlength="6" placeholder="······">
+                    </div>
+                    <div class="pt-4 flex flex-col gap-3">
+                        <button onclick="window.handleAuth()" class="btn-primary py-4 rounded-2xl font-bold text-lg">Entrar al Obrador</button>
+                        <button onclick="window.showRegisterForm()" class="text-bread-700 dark:text-bread-200 py-3 rounded-2xl font-bold hover:bg-bread-100 dark:hover:bg-bread-800 transition-colors">Crear cuenta nueva</button>
+                    </div>
+                </div>
+                <div id="auth-register-form" class="hidden space-y-5">
+                    <div class="flex items-center gap-3 mb-6">
+                        <button onclick="window.showLoginForm()" class="p-2 rounded-xl hover:bg-bread-100 transition">
+                            <i data-lucide="arrow-left" class="w-5 h-5 text-bread-700"></i>
+                        </button>
+                        <h3 class="text-xl font-serif font-bold">Nueva cuenta</h3>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Nombre</label>
+                        <input type="text" id="auth-name" class="input-field" placeholder="Tu nombre">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Email</label>
+                        <input type="email" id="auth-email-reg" class="input-field" placeholder="tu@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Pin (6 carac.)</label>
+                        <input type="password" id="auth-password-reg" class="input-field" maxlength="6" placeholder="······">
+                    </div>
+                    <div class="pt-4">
+                        <button onclick="window.handleRegister()" class="btn-primary w-full py-4 rounded-2xl font-bold text-lg">Registrarme</button>
+                    </div>
+                </div>
+                <p id="auth-error" class="text-red-500 text-sm mt-6 text-center hidden font-bold"></p>
+            </div>
+        </section>
+
+        <!-- Admin -->
+        <section id="view-admin" class="hidden space-y-10">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bread-card p-6 border-b-4 border-green-500">
+                    <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">Caja Total</h4>
+                    <p id="admin-total-revenue" class="text-3xl font-serif font-bold text-green-600">0,00€</p>
+                </div>
+                <div class="bread-card p-6 border-b-4 border-yellow-500">
+                    <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">💵 Metálico</h4>
+                    <p id="admin-total-metalico" class="text-3xl font-serif font-bold text-yellow-600">0,00€</p>
+                </div>
+                <div class="bread-card p-6 border-b-4 border-blue-500">
+                    <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">📱 Bizum</h4>
+                    <p id="admin-total-bizum" class="text-3xl font-serif font-bold text-blue-600">0,00€</p>
+                </div>
+                <div class="bread-card p-6 border-b-4 border-orange-500">
+                    <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">Pendiente</h4>
+                    <p id="admin-total-debt" class="text-3xl font-serif font-bold text-orange-600">0,00€</p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end">
+                <button onclick="window.openNewBatchModal()" class="btn-primary px-8 py-4 rounded-3xl flex items-center gap-3 font-bold text-lg shadow-xl">
+                    <i data-lucide="plus-circle" class="w-6 h-6"></i> Nuevo Horneo
+                </button>
+            </div>
+
+            <div>
+                <h3 class="text-2xl font-serif font-bold mb-6 flex items-center gap-2">
+                    <i data-lucide="flame" class="text-bread-700"></i> Horneos en curso
+                </h3>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6" id="admin-batches-list"></div>
+            </div>
+
+            <div class="bread-card p-8 shadow-xl overflow-hidden border-2 border-bread-200">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-2xl font-serif font-bold flex items-center gap-2 text-bread-800">
+                        <i data-lucide="clipboard-list"></i> Hoja de Pedidos Activos
+                    </h3>
+                    <button onclick="window.generatePrintablePDF()" class="bg-bread-100 dark:bg-bread-800 text-bread-700 px-6 py-3 rounded-2xl flex items-center gap-2 font-bold text-sm shadow-sm">
+                        <i data-lucide="printer" class="w-4 h-4"></i> PDF
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left min-w-[800px]">
+                        <thead>
+                            <tr class="text-[10px] font-black uppercase tracking-widest opacity-40 border-b-2 border-bread-100">
+                                <th class="py-4 px-2">Cliente</th>
+                                <th class="py-4">Pedido (Entr.)</th>
+                                <th class="py-4">Importe / Pago</th>
+                                <th class="py-4">Fecha</th>
+                                <th class="py-4">Estado</th>
+                                <th class="py-4 text-right">Gestión</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-reservations-list" class="divide-y divide-bread-50"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="text-xl font-serif font-bold mb-6 opacity-50 flex items-center gap-2">
+                    <i data-lucide="history"></i> Histórico
+                </h3>
+                <div id="admin-historical-list" class="space-y-4"></div>
+            </div>
+        </section>
+
+        <!-- Usuario -->
+        <section id="view-user" class="hidden space-y-12">
+            <div id="user-available-batches" class="grid md:grid-cols-2 gap-8"></div>
+            <div class="pt-10">
+                <div class="flex items-center gap-4 mb-8">
+                    <h3 class="text-3xl font-serif font-bold">Mis Reservas</h3>
+                    <div class="flex-1 h-px bg-bread-200"></div>
+                </div>
+                <div id="user-my-reservations" class="grid sm:grid-cols-2 gap-4"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="print-container" style="position:absolute;left:-9999px;top:0;"></div>
+
+    <!-- Modales (IDs originales intactos) -->
+    <div id="modal-ask-name" class="fixed inset-0 bg-bread-900/70 items-center justify-center p-4 backdrop-blur-md" style="display:none;z-index:999;">
+        <div class="bread-card p-10 max-w-md w-full modal-animate border-t-4 border-t-bread-700 text-center">
+            <h3 class="text-3xl font-serif font-bold mb-4">¿Cómo te llamas?</h3>
+            <input type="text" id="ask-name-input" class="input-field text-xl text-center font-bold mb-6" placeholder="Tu nombre">
+            <button onclick="window.saveAskedName()" class="btn-primary w-full py-4 rounded-2xl font-bold text-lg">Guardar</button>
+        </div>
+    </div>
+
+    <!-- El resto de modales siguen el mismo patrón estético manteniendo IDs... -->
+    <!-- (Se incluyen para asegurar que la funcionalidad no se rompa) -->
+    <div id="modal-new-batch" class="fixed inset-0 bg-bread-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-md">
+        <div class="bread-card p-10 max-w-md w-full modal-animate">
+            <div id="new-batch-step-1" class="space-y-6">
+                <h3 class="text-3xl font-serif font-bold">Nuevo Horneo</h3>
+                <div class="space-y-4">
+                    <input type="date" id="new-batch-date" class="input-field">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="number" id="new-batch-qty" class="input-field" placeholder="Stock" value="30">
+                        <input type="number" id="new-batch-price" class="input-field" placeholder="Precio" step="0.05" value="1.50">
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <button onclick="window.toggleModal('modal-new-batch',false)" class="flex-1 py-4 font-bold opacity-60">Cerrar</button>
+                    <button onclick="window.goToBatchReview()" class="flex-1 py-4 rounded-2xl btn-primary font-bold">Siguiente</button>
+                </div>
+            </div>
+            <div id="new-batch-step-2" class="hidden text-center space-y-6">
+                <h3 class="text-2xl font-serif font-bold">Confirmar</h3>
+                <div class="bg-bread-100 dark:bg-black/20 p-6 rounded-3xl">
+                    <p id="review-date-text" class="font-bold"></p>
+                    <p id="review-qty-text" class="text-sm"></p>
+                    <p id="review-price-text" class="text-xl font-serif font-bold text-bread-700"></p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="window.backToBatchEdit()" class="flex-1 py-3 border border-bread-200 rounded-2xl">Editar</button>
+                    <button onclick="window.createBatch()" class="flex-1 py-3 rounded-2xl bg-green-600 text-white font-bold">Publicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Entrega + Cobro -->
+    <div id="modal-partial-delivery" class="fixed inset-0 bg-bread-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-md">
+        <div class="bread-card p-10 max-w-sm w-full modal-animate">
+            <h3 class="text-2xl font-serif font-bold mb-1">Entrega</h3>
+            <p id="partial-info" class="text-sm opacity-60 mb-6"></p>
+            <div class="space-y-4">
+                <input type="number" id="partial-qty" class="input-field text-2xl text-center font-bold" min="1">
+                <div class="bg-bread-100 dark:bg-black/20 p-4 rounded-2xl">
+                    <label class="flex items-center justify-between font-bold text-sm">¿Cobrar ahora? <input type="checkbox" id="partial-pay-check" class="w-5 h-5"></label>
+                    <div id="partial-pay-method-box" class="hidden pt-3 mt-3 border-t border-bread-200">
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="btn-pay-metalico" onclick="window.selectPayMethod('metalico')" class="py-2 rounded-xl border-2 border-bread-200 text-xs font-bold">💵 Metálico</button>
+                            <button id="btn-pay-bizum" onclick="window.selectPayMethod('bizum')" class="py-2 rounded-xl border-2 border-bread-200 text-xs font-bold">📱 Bizum</button>
+                        </div>
+                        <div id="partial-pay-amount" class="text-center hidden pt-2">
+                            <p id="partial-pay-total" class="text-2xl font-serif font-bold text-bread-700 mt-1">0,00€</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-3 pt-6">
+                <button onclick="window.toggleModal('modal-partial-delivery',false)" class="flex-1 py-3 font-bold opacity-60">Cerrar</button>
+                <button id="btn-confirm-partial" class="flex-1 py-3 rounded-2xl bg-green-600 text-white font-bold">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Reservar -->
+    <div id="modal-reserve" class="fixed inset-0 bg-bread-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-md">
+        <div class="bread-card p-10 max-w-sm w-full modal-animate">
+            <h3 class="text-2xl font-serif font-bold mb-2">Tu Reserva</h3>
+            <p id="reserve-info" class="text-sm opacity-60 mb-6"></p>
+            <div class="space-y-4">
+                <input type="number" id="reserve-qty" class="input-field text-3xl text-center font-bold" min="1" value="1" oninput="window.updateReserveTotal()">
+                <div class="bg-bread-700 p-6 rounded-3xl text-center text-white">
+                    <p class="text-[10px] uppercase font-bold tracking-widest opacity-60 mb-1">Total Estimado</p>
+                    <p id="reserve-total-price" class="text-4xl font-serif font-bold">0,00€</p>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="reserve-btn-metalico" onclick="window.selectReserveMethod('metalico')" class="py-3 rounded-xl border-2 border-bread-200 text-xs font-bold">💵 Metálico</button>
+                    <button id="reserve-btn-bizum" onclick="window.selectReserveMethod('bizum')" class="py-3 rounded-xl border-2 border-bread-200 text-xs font-bold">📱 Bizum</button>
+                </div>
+            </div>
+            <button id="btn-confirm-reserve" class="btn-primary w-full py-4 rounded-2xl font-bold mt-6">Confirmar Pedido</button>
+            <button onclick="window.toggleModal('modal-reserve',false)" class="w-full py-3 font-bold opacity-40 text-sm">Volver</button>
+        </div>
+    </div>
+
+    <!-- MODAL: Cancelar -->
+    <div id="modal-cancel-reservation" class="fixed inset-0 bg-bread-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-md">
+        <div class="bread-card p-8 max-w-sm w-full modal-animate">
+            <h3 class="text-xl font-serif font-bold mb-4">Cancelar pedido</h3>
+            <input type="number" id="cancel-qty" class="input-field text-center font-bold mb-4">
+            <div id="cancel-type-btns" class="hidden grid grid-cols-2 gap-2 mb-4">
+                <button id="cancel-btn-partial" onclick="window.setCancelType('partial')" class="py-2 rounded-xl border border-bread-200 text-xs font-bold">Parcial</button>
+                <button id="cancel-btn-full" onclick="window.setCancelType('full')" class="py-2 rounded-xl border border-bread-200 text-xs font-bold">Completo</button>
+            </div>
+            <div id="cancel-summary" class="hidden text-sm text-center font-bold text-red-500 mb-6"></div>
+            <div class="flex gap-3">
+                <button onclick="window.toggleModal('modal-cancel-reservation', false)" class="flex-1 py-3 font-bold opacity-60">Volver</button>
+                <button id="btn-confirm-cancel" class="flex-1 py-3 rounded-2xl bg-red-600 text-white font-bold">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="msg-box" class="fixed bottom-10 left-1/2 -translate-x-1/2 hidden z-[60] w-full max-w-xs px-4">
+        <div id="msg-content" class="px-6 py-4 rounded-3xl shadow-2xl font-bold text-white flex items-center justify-center gap-3 animate-bounce border-2 border-white/20 backdrop-blur-md"></div>
+    </div>
+
+    <script type="module">
+        const SUPABASE_URL      = "https://uoravflfvbrgjzupcstg.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvcmF2ZmxmdmJyZ2p6dXBjc3RnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NzMyMDAsImV4cCI6MjA4ODE0OTIwMH0.daQCTpoAk6FlpuHLxpEACOmHlOdkOMeB7WHA2evOP0Q";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const ADMIN_EMAIL = 'azud15m@gmail.com';
+
+        let currentUser        = null;
+        let currentProfile     = null;
+        let isAdmin            = false;
+        let activePrice        = 0;
+        let reservationsMap    = {};
+        let profilesMap        = {};
+        let currentReservationsForPrint = [];
+        let selectedPayMethod     = null;
+        let selectedReserveMethod = 'pendiente';
+
+        const emailPrefix = e => e?.split('@')[0] || '';
+
+        // ── UI Helpers ────────────────────────────────────────────────
+        window.toggleTheme = () => {
+            const d = document.documentElement.classList.toggle('dark');
+            document.getElementById('theme-icon-light')?.classList.toggle('hidden', !d);
+            document.getElementById('theme-icon-dark')?.classList.toggle('hidden',  d);
+        };
+        window.toggleModal = (id, show) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.toggle('hidden', !show);
+            el.classList.toggle('flex',    show);
+            el.style.display = show ? 'flex' : 'none';
+        };
+        function showMessage(text, type = 'success') {
+            const box = document.getElementById('msg-box');
+            const cnt = document.getElementById('msg-content');
+            if (!box || !cnt) return;
+            cnt.className = `px-6 py-4 rounded-3xl shadow-2xl font-bold text-white flex items-center justify-center gap-3 border-2 border-white/20 backdrop-blur-md ${type === 'success' ? 'bg-bread-700' : 'bg-red-600'}`;
+            cnt.innerHTML = `<i data-lucide="${type === 'success' ? 'info' : 'alert-triangle'}"></i> ${text}`;
+            box.classList.remove('hidden');
+            lucide.createIcons();
+            setTimeout(() => box.classList.add('hidden'), 3500);
+        }
+        function formatDate(d) {
+            return new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+        }
+        function formatMonth(dateStr) {
+            return new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        }
+        function getMonth(d) { return d.slice(0, 7); }
+        function getInitials(name) {
+            return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+        }
+        function updateNavUser(name) {
+            document.getElementById('user-display').textContent = name;
+            document.getElementById('user-avatar').textContent  = getInitials(name);
+        }
+        function getDisplayName(userId, userEmail) {
+            return profilesMap[userId] || emailPrefix(userEmail);
+        }
+
+        // ── Badges métodos de pago ─────────
+        function methodBadges(r) {
+            const metAmt = (r.paid_metalico || 0) * r.price;
+            const bizAmt = (r.paid_bizum    || 0) * r.price;
+            let html = '';
+            if (metAmt > 0) html += `<span class="text-[9px] font-black px-2 py-0.5 rounded-full badge-metalico whitespace-nowrap">💵 ${metAmt.toFixed(2)}€</span>`;
+            if (bizAmt > 0) html += `<span class="text-[9px] font-black px-2 py-0.5 rounded-full badge-bizum whitespace-nowrap ml-1">📱 ${bizAmt.toFixed(2)}€</span>`;
+            if (!html && r.payment_method && r.payment_method !== 'pendiente') {
+                html = r.payment_method === 'bizum'
+                    ? `<span class="text-[9px] font-black px-2 py-0.5 rounded-full badge-bizum">📱 Bizum</span>`
+                    : `<span class="text-[9px] font-black px-2 py-0.5 rounded-full badge-metalico">💵 Metálico</span>`;
+            }
+            return html || `<span class="text-[9px] font-black px-2 py-0.5 rounded-full badge-pendiente">Pdte.</span>`;
+        }
+
+        // ── Modal nombre ──────────────────────────────────────────────
+        function askForName() {
+            const modal = document.getElementById('modal-ask-name');
+            const input = document.getElementById('ask-name-input');
+            if (input) { input.value = ''; input.style.borderColor = ''; }
+            modal.style.cssText = 'display:flex !important;position:fixed;inset:0;z-index:999;align-items:center;justify-content:center;';
+            setTimeout(() => { input?.focus(); lucide.createIcons(); }, 600);
+        }
+        function closeAskNameModal() {
+            const m = document.getElementById('modal-ask-name');
+            m.style.cssText = 'display:none !important;';
+            m.classList.add('hidden'); m.classList.remove('flex');
+        }
+        function isPlaceholderName(name, email) {
+            if (!name || !email) return true;
+            return name.trim().toLowerCase() === emailPrefix(email).toLowerCase();
+        }
+        window.saveAskedName = async () => {
+            const input = document.getElementById('ask-name-input');
+            const name  = input.value.trim();
+            if (!name) { input.style.borderColor = '#ef4444'; input.placeholder = 'Por favor escribe tu nombre'; input.focus(); return; }
+            closeAskNameModal();
+            const { error } = await supabase.from('profiles').upsert({ id: currentUser.id, display_name: name });
+            if (!error) {
+                currentProfile = name; updateNavUser(name);
+                isAdmin ? fetchAdminData() : fetchUserData();
+            } else { showMessage("Error: " + error.message, "error"); askForName(); }
+        };
+
+        // ── Auth ──────────────────────────────────────────────────────
+        window.showRegisterForm = () => {
+            document.getElementById('auth-login-form').classList.add('hidden');
+            document.getElementById('auth-register-form').classList.remove('hidden');
+            lucide.createIcons();
+        };
+        window.showLoginForm = () => {
+            document.getElementById('auth-register-form').classList.add('hidden');
+            document.getElementById('auth-login-form').classList.remove('hidden');
+        };
+        window.handleAuth = async () => {
+            const email = document.getElementById('auth-email').value.trim();
+            const pass  = document.getElementById('auth-password').value;
+            const err   = document.getElementById('auth-error');
+            err.classList.add('hidden');
+            try {
+                const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+                if (error) throw error;
+            } catch(e) { err.textContent = e.message; err.classList.remove('hidden'); }
+        };
+
+        window.handleRegister = async () => {
+            const name  = document.getElementById('auth-name').value.trim();
+            const email = document.getElementById('auth-email-reg').value.trim();
+            const pass  = document.getElementById('auth-password-reg').value;
+            const err   = document.getElementById('auth-error');
+            err.classList.add('hidden');
+            if (!name || !email || pass?.length < 6) { err.textContent = "Revisa los campos."; err.classList.remove('hidden'); return; }
+            try {
+                const { data, error } = await supabase.auth.signUp({ email, password: pass });
+                if (error) throw error;
+                localStorage.setItem('pending_display_name', name);
+                if (data?.user?.id) { await supabase.from('profiles').upsert({ id: data.user.id, display_name: name }); }
+                showMessage(`¡Bienvenido/a, ${name}!`);
+                window.showLoginForm();
+            } catch(e) { err.textContent = e.message; err.classList.remove('hidden'); }
+        };
+
+        window.handleLogout = () => supabase.auth.signOut();
+
+        async function loadProfile(userId) {
+            const { data } = await supabase.from('profiles').select('display_name').eq('id', userId).single();
+            return data?.display_name || null;
+        }
+
+        // ── Init ──────────────────────────────────────────────────────
+        async function init() {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                await updateUserState(session?.user || null);
+                supabase.auth.onAuthStateChange(async (_e, s) => await updateUserState(s?.user || null));
+            } catch(e) { console.error(e); }
+            finally { document.getElementById('loading').classList.add('hidden'); }
+        }
+
+        async function updateUserState(user) {
+            currentUser = user;
+            isAdmin = user?.email === ADMIN_EMAIL;
+            document.getElementById('nav-user').classList.toggle('hidden', !user);
+            document.getElementById('view-auth').classList.toggle('hidden', !!user);
+            document.getElementById('view-admin').classList.toggle('hidden', !isAdmin);
+            document.getElementById('view-user').classList.toggle('hidden', !user || isAdmin);
+            if (user) {
+                const pendingName = localStorage.getItem('pending_display_name');
+                if (pendingName) {
+                    localStorage.removeItem('pending_display_name');
+                    await supabase.from('profiles').upsert({ id: user.id, display_name: pendingName });
+                    currentProfile = pendingName;
+                    updateNavUser(pendingName);
+                } else {
+                    const displayName = await loadProfile(user.id);
+                    currentProfile = displayName;
+                    if (!isAdmin && isPlaceholderName(displayName, user.email)) {
+                        updateNavUser(emailPrefix(user.email));
+                        askForName();
+                    } else {
+                        updateNavUser(displayName || emailPrefix(user.email));
+                    }
+                }
+                isAdmin ? fetchAdminData() : fetchUserData();
+                subscribeToChanges();
+            }
+            lucide.createIcons();
+        }
+
+        // ── Datos ─────────────────────────────────────────────────────
+        async function fetchAdminData() {
+            const { data: batches }      = await supabase.from('batches').select('*').order('date', { ascending: false });
+            const { data: reservations } = await supabase.from('reservations').select('*').neq('status', 'cancelado').order('created_at', { ascending: false });
+            const userIds = [...new Set((reservations || []).map(r => r.user_id))];
+            if (userIds.length) {
+                const { data: profiles } = await supabase.from('profiles').select('id,display_name').in('id', userIds);
+                profilesMap = {}; (profiles || []).forEach(p => { profilesMap[p.id] = p.display_name; });
+            }
+            const resWithPrice = (reservations || []).map(r => {
+                const batch = (batches || []).find(b => b.id === r.batch_id);
+                return { ...r, price: batch?.price ?? 0, batch_status: batch?.status ?? 'active' };
+            });
+            reservationsMap = {}; resWithPrice.forEach(r => { reservationsMap[r.id] = r; });
+            currentReservationsForPrint = resWithPrice.filter(r => r.batch_status === 'active');
+            renderAdminDashboard(batches || [], resWithPrice);
+        }
+
+        async function fetchUserData() {
+            const { data: activeBatches } = await supabase.from('batches').select('*').eq('status', 'active');
+            const { data: myRes }         = await supabase.from('reservations').select('*').eq('user_id', currentUser.id).neq('status', 'cancelado').order('created_at', { ascending: false });
+            const ids = new Set((activeBatches || []).map(b => b.id));
+            const myResWithPrice = (myRes || []).filter(r => ids.has(r.batch_id)).map(r => {
+                const batch = (activeBatches || []).find(b => b.id === r.batch_id);
+                return { ...r, price: batch?.price ?? 0 };
+            });
+            renderUserAvailable((activeBatches || []).filter(b => b.remaining > 0));
+            renderUserMyReservations(myResWithPrice);
+        }
+
+        function subscribeToChanges() {
+            supabase.channel('bread-db')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'batches' },      () => isAdmin ? fetchAdminData() : fetchUserData())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => isAdmin ? fetchAdminData() : fetchUserData())
+                .subscribe();
+        }
+
+        // ── Nuevo Horneo ──────────────────────────────────────────────
+        window.openNewBatchModal = () => {
+            document.getElementById('new-batch-step-1').classList.remove('hidden');
+            document.getElementById('new-batch-step-2').classList.add('hidden');
+            window.toggleModal('modal-new-batch', true);
+        };
+        window.goToBatchReview = () => {
+            const date  = document.getElementById('new-batch-date').value;
+            const qty   = document.getElementById('new-batch-qty').value;
+            const price = document.getElementById('new-batch-price').value;
+            if (!date || qty < 1) return;
+            document.getElementById('review-date-text').textContent  = formatDate(date);
+            document.getElementById('review-qty-text').textContent   = `${qty} unidades`;
+            document.getElementById('review-price-text').textContent = `${parseFloat(price).toFixed(2)}€/ud`;
+            document.getElementById('new-batch-step-1').classList.add('hidden');
+            document.getElementById('new-batch-step-2').classList.remove('hidden');
+        };
+        window.backToBatchEdit = () => {
+            document.getElementById('new-batch-step-1').classList.remove('hidden');
+            document.getElementById('new-batch-step-2').classList.add('hidden');
+        };
+        window.createBatch = async () => {
+            const date  = document.getElementById('new-batch-date').value;
+            const qty   = parseInt(document.getElementById('new-batch-qty').value);
+            const price = parseFloat(document.getElementById('new-batch-price').value);
+            const { error } = await supabase.from('batches').insert([{ date, total: qty, remaining: qty, status: 'active', price }]);
+            if (!error) window.toggleModal('modal-new-batch', false);
+        };
+
+        window.archiveBatch = async (id) => {
+            if (!confirm("¿Cerrar?")) return;
+            await supabase.from('batches').update({ status: 'inactive' }).eq('id', id);
+        };
+        window.deleteBatch = async (id) => {
+            if (!confirm("¿Borrar?")) return;
+            await supabase.from('batches').delete().eq('id', id);
+        };
+
+        // ── Notificación manual ──
+        window.sendBatchNotification = async (batchId, batchDate, batchPrice, batchRemaining) => {
+            if (!confirm(`¿Enviar aviso?\nFecha: ${formatDate(batchDate)}\n${batchRemaining} uds.`)) return;
+            showMessage("Enviando aviso...");
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token || SUPABASE_ANON_KEY;
+                const resp = await fetch('https://uoravflfvbrgjzupcstg.supabase.co/functions/v1/notify-new-batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ batch: { id: batchId, date: batchDate, price: batchPrice, remaining: batchRemaining } }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error);
+                showMessage(`✓ Aviso enviado a ${data.sent} clientes`);
+            } catch(e) { showMessage("Error: " + e.message, "error"); }
+        };
+
+        // ── Gestión Pagos/Entregas ──
+        window.openMarkAsPaidModal = (resId) => {
+            const res = reservationsMap[resId];
+            if (!res) return;
+            selectedPayMethod = null;
+            document.getElementById('partial-info').textContent = `${getDisplayName(res.user_id, res.user_email)} · Cobrar total`;
+            document.getElementById('partial-qty').value = res.quantity - (res.paid_quantity || 0);
+            document.getElementById('partial-qty').disabled = true;
+            document.getElementById('partial-pay-check').checked = true;
+            document.getElementById('partial-pay-check').disabled = true;
+            document.getElementById('partial-pay-method-box').classList.remove('hidden');
+            document.getElementById('partial-pay-amount').classList.remove('hidden');
+            document.getElementById('partial-pay-total').textContent = ((res.quantity - (res.paid_quantity || 0)) * res.price).toFixed(2) + '€';
+            document.getElementById('btn-confirm-partial').onclick = () => {
+                if (!selectedPayMethod) return showMessage("Elige método", "error");
+                confirmPartialDelivery(res, res.quantity - (res.paid_quantity || 0), true, selectedPayMethod);
+            };
+            window.toggleModal('modal-partial-delivery', true);
+        };
+
+        window.openPartialDeliveryModal = (resId) => {
+            const res = reservationsMap[resId];
+            if (!res) return;
+            selectedPayMethod = null;
+            const pendDel = res.quantity - (res.delivered_quantity || 0);
+            document.getElementById('partial-info').textContent = `${getDisplayName(res.user_id, res.user_email)} · Entregar parcial`;
+            document.getElementById('partial-qty').value = pendDel;
+            document.getElementById('partial-qty').max = pendDel;
+            document.getElementById('partial-qty').disabled = false;
+            document.getElementById('partial-pay-check').checked = false;
+            document.getElementById('partial-pay-check').disabled = false;
+            document.getElementById('partial-pay-method-box').classList.add('hidden');
+            document.getElementById('partial-pay-amount').classList.add('hidden');
+            document.getElementById('partial-pay-check').onchange = (e) => {
+                document.getElementById('partial-pay-method-box').classList.toggle('hidden', !e.target.checked);
+                document.getElementById('partial-pay-total').textContent = (document.getElementById('partial-qty').value * res.price).toFixed(2) + '€';
+            };
+            document.getElementById('btn-confirm-partial').onclick = () => {
+                confirmPartialDelivery(res, parseInt(document.getElementById('partial-qty').value), document.getElementById('partial-pay-check').checked, selectedPayMethod);
+            };
+            window.toggleModal('modal-partial-delivery', true);
+        };
+
+        async function confirmPartialDelivery(res, amount, doPay, method) {
+            const newDel = (res.delivered_quantity || 0) + amount;
+            const newPaid = doPay ? Math.min((res.paid_quantity || 0) + amount, res.quantity) : (res.paid_quantity || 0);
+            const update = {
+                delivered_quantity: newDel,
+                paid_quantity: newPaid,
+                is_paid: newPaid >= res.quantity,
+                status: newDel >= res.quantity ? 'entregado' : 'reservado',
+                payment_method: doPay ? method : res.payment_method,
+                paid_metalico: (res.paid_metalico || 0) + (doPay && method === 'metalico' ? amount : 0),
+                paid_bizum: (res.paid_bizum || 0) + (doPay && method === 'bizum' ? amount : 0)
+            };
+            await supabase.from('reservations').update(update).eq('id', res.id);
+            window.toggleModal('modal-partial-delivery', false);
+            showMessage("✓ Registro actualizado");
+        }
+
+        window.selectPayMethod = (m) => {
+            selectedPayMethod = m;
+            document.getElementById('btn-pay-metalico').style.borderColor = m==='metalico'?'#945D31':'';
+            document.getElementById('btn-pay-bizum').style.borderColor = m==='bizum'?'#3b82f6':'';
+            document.getElementById('partial-pay-amount').classList.remove('hidden');
+        };
+
+        // ── Reservas ──
+        window.openReserveModal = (batchId, date, rem, price) => {
+            activePrice = price; selectedReserveMethod = 'pendiente';
+            document.getElementById('reserve-info').textContent = `Recogida ${formatDate(date)}`;
+            document.getElementById('reserve-qty').max = rem;
+            document.getElementById('reserve-qty').value = 1;
+            window.updateReserveTotal();
+            document.getElementById('btn-confirm-reserve').onclick = () => confirmReservation(batchId, date, rem);
+            window.toggleModal('modal-reserve', true);
+        };
+        window.updateReserveTotal = () => {
+            document.getElementById('reserve-total-price').textContent = (document.getElementById('reserve-qty').value * activePrice).toFixed(2) + '€';
+        };
+        window.selectReserveMethod = (m) => {
+            selectedReserveMethod = m;
+            document.getElementById('reserve-btn-metalico').style.borderColor = m==='metalico'?'white':'';
+            document.getElementById('reserve-btn-bizum').style.borderColor = m==='bizum'?'white':'';
+        };
+        async function confirmReservation(bId, date, rem) {
+            const qty = parseInt(document.getElementById('reserve-qty').value);
+            const { error } = await supabase.from('reservations').insert([{
+                batch_id: bId, batch_date: date, user_id: currentUser.id, user_email: currentUser.email,
+                quantity: qty, payment_method: selectedReserveMethod
+            }]);
+            if (!error) {
+                await supabase.from('batches').update({ remaining: rem - qty }).eq('id', bId);
+                window.toggleModal('modal-reserve', false);
+                showMessage("✓ Pedido confirmado");
+            }
+        }
+
+        // ── Cancelaciones ──
+        window.openCancelModal = (resId) => {
+            const res = reservationsMap[resId];
+            const max = res.quantity - (res.delivered_quantity || 0);
+            document.getElementById('cancel-qty').max = max;
+            document.getElementById('cancel-qty').value = max;
+            document.getElementById('cancel-type-btns').classList.toggle('hidden', max<=1);
+            document.getElementById('btn-confirm-cancel').onclick = () => confirmCancel(res, max);
+            window.toggleModal('modal-cancel-reservation', true);
+        };
+        async function confirmCancel(res, max) {
+            const qty = parseInt(document.getElementById('cancel-qty').value);
+            if (qty >= max) await supabase.from('reservations').update({ status: 'cancelado' }).eq('id', res.id);
+            else await supabase.from('reservations').update({ quantity: res.quantity - qty }).eq('id', res.id);
+            
+            const { data: b } = await supabase.from('batches').select('remaining').eq('id', res.batch_id).single();
+            await supabase.from('batches').update({ remaining: b.remaining + qty }).eq('id', res.batch_id);
+            window.toggleModal('modal-cancel-reservation', false);
+        }
+
+        // ── Render Admin ──
+        function renderAdminDashboard(batches, reservations) {
+            const activeBatches = batches.filter(b => b.status === 'active');
+            const inactiveBatches = batches.filter(b => b.status === 'inactive');
+
+            let totalMet = 0, totalBiz = 0, totalDeuda = 0;
+            reservations.filter(r => r.batch_status === 'active').forEach(r => {
+                totalMet   += (r.paid_metalico || 0) * r.price;
+                totalBiz   += (r.paid_bizum    || 0) * r.price;
+                totalDeuda += (r.quantity - (r.paid_quantity || 0)) * r.price;
+            });
+            const totalCobrado = totalMet + totalBiz;
+            document.getElementById('admin-total-revenue').textContent  = totalCobrado.toFixed(2) + "€";
+            document.getElementById('admin-total-metalico').textContent = totalMet.toFixed(2) + "€";
+            document.getElementById('admin-total-bizum').textContent    = totalBiz.toFixed(2) + "€";
+            document.getElementById('admin-total-debt').textContent     = totalDeuda.toFixed(2) + "€";
+
+            document.getElementById('admin-batches-list').innerHTML = activeBatches.length
+                ? activeBatches.map(b => `
+                <div class="bread-card p-6 shadow-lg border-l-4 border-bread-700">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="text-[10px] font-black tracking-widest px-2 py-1 rounded-lg bg-orange-100 text-bread-700 uppercase">Activo</span>
+                        <p class="text-xs opacity-50 font-bold">${formatDate(b.date)}</p>
+                    </div>
+                    <div class="text-center py-4 bg-bread-50 dark:bg-black/20 rounded-3xl mb-4">
+                        <p class="text-4xl font-serif font-bold text-bread-700">${b.remaining}<span class="text-sm opacity-30"> / ${b.total}</span></p>
+                        <p class="text-[10px] font-black uppercase tracking-widest opacity-40">Piezas Disponibles</p>
+                        <p class="text-lg font-bold mt-1">${b.price.toFixed(2)}€/ud</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="window.archiveBatch('${b.id}')" class="flex-1 text-xs font-black uppercase py-3 rounded-xl bg-bread-100 dark:bg-bread-800 hover:bg-bread-200 transition">Cerrar</button>
+                        <button onclick="window.sendBatchNotification('${b.id}','${b.date}',${b.price},${b.remaining})"
+                            class="flex-1 text-xs font-black uppercase py-3 rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 transition" title="Avisar a todos los usuarios">
+                            📧 Avisar
+                        </button>
+                        <button onclick="window.deleteBatch('${b.id}')" class="px-4 py-3 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition">
+                            <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
+                        </button>
+                    </div>
+                </div>`).join('')
+                : '<p class="opacity-30 italic col-span-3 text-center py-8">No hay horneos activos.</p>';
+
+            const activeRes = reservations.filter(r => r.batch_status === 'active');
+            document.getElementById('admin-reservations-list').innerHTML = activeRes.length
+                ? activeRes.map(r => {
+                    const dName   = getDisplayName(r.user_id, r.user_email);
+                    const total   = r.quantity * r.price;
+                    const cobrado = (r.paid_quantity || 0) * r.price;
+                    const pdte    = (r.quantity - (r.paid_quantity || 0)) * r.price;
+                    const hayParc = (r.paid_quantity || 0) > 0 && !r.is_paid;
+                    return `
+                    <tr class="text-sm hover:bg-bread-50/50 dark:hover:bg-black/10 transition-colors">
+                        <td class="py-5 px-2">
+                            <p class="font-bold">${dName}</p>
+                            <p class="text-[10px] opacity-30">${r.user_email}</p>
+                        </td>
+                        <td class="py-5"><span class="font-black text-lg">${r.quantity}</span><span class="text-xs opacity-40"> (${r.delivered_quantity || 0} entr.)</span></td>
+                        <td class="py-5">
+                            <p class="font-bold text-bread-800 dark:text-bread-200">${total.toFixed(2)}€</p>
+                            ${hayParc ? `<p class="text-[9px] text-green-600 font-black">✓ ${cobrado.toFixed(2)}€</p><p class="text-[9px] text-orange-600 font-black">✗ ${pdte.toFixed(2)}€ pdte.</p>` : ''}
+                            <div class="flex flex-wrap gap-1 mt-1">${methodBadges(r)}</div>
+                        </td>
+                        <td class="py-5 text-[10px] font-bold opacity-40 uppercase">${formatDate(r.batch_date).split(' ').slice(1).join(' ')}</td>
+                        <td class="py-5">
+                            <span class="px-3 py-1 rounded-full text-[9px] font-black tracking-widest ${r.is_paid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} uppercase">
+                                ${r.is_paid ? 'Pagado' : 'Pendiente'}
+                            </span>
+                        </td>
+                        <td class="py-5">
+                            <div class="flex gap-2">
+                                ${!r.is_paid ? `<button onclick="window.openMarkAsPaidModal('${r.id}')" class="bg-green-600 text-white text-[9px] px-3 py-2 rounded-lg font-black uppercase hover:bg-green-700 transition">Cobrar</button>` : ''}
+                                ${r.status === 'reservado'
+                                    ? `<button onclick="window.openPartialDeliveryModal('${r.id}')" class="bg-bread-700 text-white text-[9px] px-3 py-2 rounded-lg font-black uppercase hover:bg-bread-800 transition">Entrega</button>`
+                                    : '<i data-lucide="check" class="text-green-600 w-5 h-5"></i>'}
+                                ${r.status !== 'cancelado' && r.status !== 'entregado'
+                                    ? `<button onclick="window.openCancelModal('${r.id}', true)" class="bg-red-100 text-red-600 text-[9px] px-3 py-2 rounded-lg font-black uppercase hover:bg-red-600 hover:text-white transition">✕ Cancelar</button>`
+                                    : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+                }).join('')
+                : '<tr><td colspan="6" class="py-12 text-center italic opacity-30">No hay pedidos registrados</td></tr>';
+
+            // RESTAURACIÓN DE LA LÓGICA DE HISTÓRICO ORIGINAL
+            const byMonth = {};
+            inactiveBatches.forEach(b => {
+                const m = getMonth(b.date);
+                if (!byMonth[m]) byMonth[m] = [];
+                byMonth[m].push(b);
+            });
+
+            const histHtml = Object.keys(byMonth).sort().reverse().map(month => {
+                const monthBatches = byMonth[month];
+                let mTotalMet = 0, mTotalBiz = 0, mTotalPdte = 0;
+                const allDeudores = [];
+
+                monthBatches.forEach(b => {
+                    const bRes = reservations.filter(r => r.batch_id === b.id);
+                    bRes.forEach(r => {
+                        mTotalMet  += (r.paid_metalico || 0) * r.price;
+                        mTotalBiz  += (r.paid_bizum    || 0) * r.price;
+                        mTotalPdte += (r.quantity - (r.paid_quantity || 0)) * r.price;
+                        if (!r.is_paid) allDeudores.push({ ...r, batch_date: b.date });
+                    });
+                });
+                const mTotalCobrado = mTotalMet + mTotalBiz;
+                const mLabel = formatMonth(monthBatches[0].date);
+                const pct = (mTotalCobrado + mTotalPdte) > 0 ? Math.min(100, (mTotalCobrado / (mTotalCobrado + mTotalPdte)) * 100) : 100;
+
+                const batchDetails = monthBatches.map(b => {
+                    const bRes     = reservations.filter(r => r.batch_id === b.id);
+                    const bCobrado = bRes.reduce((s, r) => s + (r.paid_quantity  || 0) * r.price, 0);
+                    const bMet     = bRes.reduce((s, r) => s + (r.paid_metalico  || 0) * r.price, 0);
+                    const bBiz     = bRes.reduce((s, r) => s + (r.paid_bizum     || 0) * r.price, 0);
+                    const bPdte    = bRes.reduce((s, r) => s + (r.quantity - (r.paid_quantity || 0)) * r.price, 0);
+                    return `
+                    <details class="bg-bread-50 dark:bg-black/20 rounded-2xl overflow-hidden border border-bread-200/50 dark:border-bread-800/50">
+                        <summary class="flex justify-between items-center p-4 select-none">
+                            <div class="flex items-center gap-3">
+                                <svg class="chevron-icon w-4 h-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                <div>
+                                    <p class="font-bold text-sm capitalize">${formatDate(b.date)}</p>
+                                    <p class="text-[10px] opacity-40">${bRes.length} reserva${bRes.length !== 1 ? 's' : ''} · ${b.price.toFixed(2)}€/ud</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-serif font-bold text-green-700">${bCobrado.toFixed(2)}€</p>
+                                ${bPdte > 0 ? `<p class="text-[10px] text-red-500 font-black">-${bPdte.toFixed(2)}€ pdte.</p>` : ''}
+                            </div>
+                        </summary>
+                        <div class="px-4 pb-4 border-t border-bread-200 dark:border-bread-800 pt-3 space-y-2">
+                            <div class="flex gap-2 mb-3">
+                                ${bMet > 0 ? `<span class="text-[9px] font-black px-2 py-1 rounded-full badge-metalico">💵 ${bMet.toFixed(2)}€</span>` : ''}
+                                ${bBiz > 0 ? `<span class="text-[9px] font-black px-2 py-1 rounded-full badge-bizum">📱 ${bBiz.toFixed(2)}€</span>` : ''}
+                            </div>
+                            ${bRes.map(r => {
+                                const dName = getDisplayName(r.user_id, r.user_email);
+                                const rTotal = r.quantity * r.price;
+                                const rPdte  = (r.quantity - (r.paid_quantity || 0)) * r.price;
+                                return `
+                                <div class="flex justify-between items-center text-sm p-2 bg-white/70 dark:bg-black/30 rounded-xl border border-bread-100 dark:border-bread-900/50">
+                                    <div>
+                                        <p class="font-bold">${dName}</p>
+                                        <div class="flex gap-1 flex-wrap mt-0.5">${methodBadges(r)}</div>
+                                    </div>
+                                    <div class="text-right flex items-center gap-3">
+                                        <div>
+                                            <p class="font-bold">${rTotal.toFixed(2)}€</p>
+                                            ${rPdte > 0 ? `<p class="text-[9px] text-red-500 font-black">-${rPdte.toFixed(2)}€ pdte.</p>` : `<p class="text-[9px] text-green-600 font-black">✓ Pagado</p>`}
+                                        </div>
+                                        ${!r.is_paid ? `<button onclick="window.openMarkAsPaidModal('${r.id}')" class="text-[9px] bg-green-600 text-white px-2 py-1.5 rounded-lg font-black uppercase hover:bg-green-700 transition">Cobrar</button>` : ''}
+                                    </div>
+                                </div>`;
+                            }).join('')}
+                            <div class="pt-2 text-right">
+                                <button onclick="window.deleteBatch('${b.id}')" class="text-[10px] text-red-400 hover:text-red-600 underline transition font-bold uppercase">Borrar este horneo</button>
+                            </div>
+                        </div>
+                    </details>`;
+                });
+
+                return `
+                <div class="bread-card p-6 border-2 border-dashed border-bread-200 dark:border-bread-800 bg-white/40 dark:bg-black/10">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 class="text-xl font-serif font-bold capitalize">${mLabel}</h4>
+                            <p class="text-xs opacity-40 font-bold uppercase">${monthBatches.length} horneo${monthBatches.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-2xl font-serif font-bold text-green-700">${mTotalCobrado.toFixed(2)}€</p>
+                            <p class="text-[10px] opacity-40 font-black uppercase">cobrado</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl text-center">
+                            <p class="text-xs font-black opacity-60 mb-1">💵 Metálico</p>
+                            <p class="text-lg font-serif font-bold text-yellow-700">${mTotalMet.toFixed(2)}€</p>
+                        </div>
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl text-center">
+                            <p class="text-xs font-black opacity-60 mb-1">📱 Bizum</p>
+                            <p class="text-lg font-serif font-bold text-blue-700">${mTotalBiz.toFixed(2)}€</p>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 mb-3 overflow-hidden">
+                        <div class="bg-green-500 h-1.5 rounded-full" style="width:${pct.toFixed(1)}%"></div>
+                    </div>
+                    ${mTotalPdte > 0 ? `<p class="text-xs font-black text-red-500 mb-4">✗ ${mTotalPdte.toFixed(2)}€ pendiente</p>` : `<p class="text-xs font-black text-green-600 mb-4">✓ Todo cobrado</p>`}
+                    ${allDeudores.length ? `
+                    <div class="p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl mb-4 border border-red-100 dark:border-red-900">
+                        <p class="text-[10px] font-black text-red-600 uppercase tracking-widest mb-3">Deudores del mes (${allDeudores.length})</p>
+                        <div class="space-y-2">
+                        ${allDeudores.map(m => {
+                            const dName = getDisplayName(m.user_id, m.user_email);
+                            const debe  = (m.quantity - (m.paid_quantity || 0)) * m.price;
+                            return `
+                            <div class="flex justify-between items-center text-sm p-2 bg-white/80 dark:bg-black/40 rounded-xl">
+                                <div>
+                                    <p class="font-bold">${dName}</p>
+                                    <p class="text-[10px] opacity-50 capitalize">${formatDate(m.batch_date)}</p>
+                                    <div class="mt-0.5">${methodBadges(m)}</div>
+                                </div>
+                                <div class="flex items-center gap-2 ml-4">
+                                    <span class="font-black text-red-600 whitespace-nowrap">${debe.toFixed(2)}€</span>
+                                    <button onclick="window.openMarkAsPaidModal('${m.id}')" class="text-[9px] bg-green-600 text-white px-2 py-1.5 rounded-lg font-black uppercase hover:bg-green-700 transition">Cobrar</button>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                        </div>
+                    </div>` : ''}
+                    <div class="space-y-2">
+                        <p class="text-[10px] font-black uppercase opacity-30 mb-2 mt-4">Detalle de horneos</p>
+                        ${batchDetails}
+                    </div>
+                </div>`;
+            }).join('');
+
+            document.getElementById('admin-historical-list').innerHTML =
+                histHtml || '<p class="text-center opacity-40 italic py-8">Historial vacío.</p>';
+
+            lucide.createIcons();
+        }
+
+        // ── Render Usuario ──
+        function renderUserAvailable(items) {
+            document.getElementById('user-available-batches').innerHTML = items.map(b => `
+                <div class="bread-card p-10 shadow-2xl hover:scale-[1.02] transition-transform">
+                    <p class="text-xs font-black uppercase tracking-widest opacity-40 mb-2">Próximo Horneo</p>
+                    <h4 class="text-4xl font-serif font-bold mb-6">${formatDate(b.date)}</h4>
+                    <div class="flex items-center justify-between pt-6 border-t border-bread-100">
+                        <div class="text-center">
+                            <p class="text-2xl font-serif font-bold text-bread-700">${b.remaining}</p>
+                            <p class="text-[9px] font-black opacity-40 uppercase">Quedan</p>
+                        </div>
+                        <button onclick="window.openReserveModal('${b.id}','${b.date}',${b.remaining},${b.price})" class="btn-primary px-8 py-4 rounded-3xl font-bold">Reservar (${b.price.toFixed(2)}€)</button>
+                    </div>
+                </div>`).join('');
+            lucide.createIcons();
+        }
+
+        function renderUserMyReservations(items) {
+            document.getElementById('user-my-reservations').innerHTML = items.map(r => `
+                <div class="bread-card p-6 flex justify-between items-center border-l-8 ${r.is_paid?'border-green-500':'border-red-500'}">
+                    <div>
+                        <p class="text-[10px] font-bold opacity-40 uppercase">${formatDate(r.batch_date)}</p>
+                        <p class="text-xl font-bold">${r.quantity} <span class="text-xs font-normal opacity-50">piezas</span></p>
+                        <div class="mt-1 flex gap-1">${methodBadges(r)}</div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-serif font-bold text-bread-800">${(r.quantity * r.price).toFixed(2)}€</p>
+                        ${r.status==='reservado'?`<button onclick="window.openCancelModal('${r.id}')" class="text-[10px] text-red-500 font-bold mt-2">✕ Cancelar</button>`:''}
+                    </div>
+                </div>`).join('');
+            lucide.createIcons();
+        }
+
+        // ── PDF ──
+        window.generatePrintablePDF = async () => {
+            if (!currentReservationsForPrint?.length) return;
+            const container = document.getElementById('print-container');
+            container.innerHTML = `<div class="print-page"><div class="print-header"><h1>🥐 El Horno Artesano</h1></div><table class="print-table">
+                <thead><tr><th>Cliente</th><th>Cant.</th><th>Importe</th><th>Estado</th></tr></thead>
+                <tbody>${currentReservationsForPrint.map(r=>`<tr><td>${getDisplayName(r.user_id, r.user_email)}</td><td>${r.quantity}</td><td>${(r.quantity*r.price).toFixed(2)}€</td><td>${r.is_paid?'Pagado':'Pendiente'}</td></tr>`).join('')}</tbody>
+            </table></div>`;
+            setTimeout(async () => {
+                const canvas = await html2canvas(container, { scale: 2 });
+                const pdf = new window.jspdf.jsPDF();
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, (canvas.height * 210) / canvas.width);
+                pdf.save(`Pedidos_${new Date().toISOString().split('T')[0]}.pdf`);
+                showMessage("PDF generado ✓");
+            }, 500);
+        };
+
+        init();
+    </script>
+</body>
+</html>
