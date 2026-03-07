@@ -1199,7 +1199,7 @@
         window.generatePrintablePDF = async () => {
             if (!currentReservationsForPrint?.length) return;
             const container = document.getElementById('print-container');
-            container.innerHTML = `<div class="print-page"><div class="print-header"><h1>🥐 El Horno Artesano</h1></div><table class="print-table">
+            container.innerHTML = `<div class="print-page"><div class="print-header"><h1>🍞 El Horno Artesano</h1></div><table class="print-table">
                 <thead><tr><th>Cliente</th><th>Cant.</th><th>Importe</th><th>Estado</th></tr></thead>
                 <tbody>${currentReservationsForPrint.map(r=>`<tr><td>${getDisplayName(r.user_id, r.user_email)}</td><td>${r.quantity}</td><td>${(r.quantity*r.price).toFixed(2)}€</td><td>${r.is_paid?'Pagado':'Pendiente'}</td></tr>`).join('')}</tbody>
             </table></div>`;
