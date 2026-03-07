@@ -19,10 +19,12 @@
                             50: '#FCF9F5',  // Harina
                             100: '#F5EFE6', // Miga
                             200: '#EADDCF', // Miga madura
+                            400: '#a47c5d', // Miga en sombra 
+                            600: '#7c5638', // Miga oscura
                             700: '#945D31', // Corteza
                             800: '#6F4422', // Corteza oscura
                             900: '#4A2F1B'  // Café
-                        },
+                        },                        
                         accent: '#E67E22'
                     },
                     borderRadius: { xl:'1.25rem','2xl':'1.75rem','3xl':'2.5rem' }
@@ -98,7 +100,7 @@
         .modal-animate { animation: modalEnter 0.3s ease-out; }
         @keyframes modalEnter { from{opacity:0;transform:scale(0.95) translateY(10px)} to{opacity:1;transform:scale(1) translateY(0)} }
         
-        .badge-bizum    { background: #e8f5e9; color: #2e7d32; }
+        .badge-bizum    { background: #e8f5e9; color: #4e6f50; }
         .badge-metalico { background: #fff3e0; color: #e65100; }
         .badge-pendiente{ background: #fce4ec; color: #c62828; }
 
@@ -135,7 +137,7 @@
                 </svg>
             </div>
             <h1 class="text-5xl md:text-7xl font-serif font-bold italic text-bread-900 dark:text-white drop-shadow-sm">El Horno Artesano</h1>
-            <p class="text-lg md:text-xl font-medium text-bread-700 dark:text-bread-200 mt-2 tracking-widest uppercase">Gestión de Obrador</p>
+            <p class="text-lg md:text-xl font-medium text-bread-700 dark:text-bread-200 mt-2 tracking-widest uppercase">Masa madre, fermentación lenta y mucho cariño.</p>
         </div>
     </div>
 
@@ -214,21 +216,21 @@
         <!-- Admin -->
         <section id="view-admin" class="hidden space-y-10">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bread-card p-6 border-b-4 border-green-500">
+                <div class="bread-card p-6 border-b-4 border-lime-700">
                     <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">Caja Total</h4>
-                    <p id="admin-total-revenue" class="text-3xl font-serif font-bold text-green-600">0,00€</p>
+                    <p id="admin-total-revenue" class="text-3xl font-serif font-bold text-green-800">0,00€</p>
                 </div>
-                <div class="bread-card p-6 border-b-4 border-yellow-500">
+                <div class="bread-card p-6 border-b-4 border-yellow-600">
                     <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">💵 Metálico</h4>
-                    <p id="admin-total-metalico" class="text-3xl font-serif font-bold text-yellow-600">0,00€</p>
+                    <p id="admin-total-metalico" class="text-3xl font-serif font-bold text-yellow-800">0,00€</p>
                 </div>
-                <div class="bread-card p-6 border-b-4 border-blue-500">
+                <div class="bread-card p-6 border-b-4 border-indigo-500">
                     <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">📱 Bizum</h4>
-                    <p id="admin-total-bizum" class="text-3xl font-serif font-bold text-blue-600">0,00€</p>
+                    <p id="admin-total-bizum" class="text-3xl font-serif font-bold text-indigo-700">0,00€</p>
                 </div>
-                <div class="bread-card p-6 border-b-4 border-orange-500">
+                <div class="bread-card p-6 border-b-4 border-amber-500">
                     <h4 class="text-xs font-black uppercase tracking-tighter opacity-40 mb-1">Pendiente</h4>
-                    <p id="admin-total-debt" class="text-3xl font-serif font-bold text-orange-600">0,00€</p>
+                    <p id="admin-total-debt" class="text-3xl font-serif font-bold text-amber-600">0,00€</p>
                 </div>
             </div>
             
@@ -385,19 +387,40 @@
         </div>
     </div>
 
-    <!-- MODAL: Cancelar -->
+    <!-- MODAL: Cancelar Reserva -->
     <div id="modal-cancel-reservation" class="fixed inset-0 bg-bread-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-md">
-        <div class="bread-card p-8 max-w-sm w-full modal-animate">
-            <h3 class="text-xl font-serif font-bold mb-4">Cancelar pedido</h3>
-            <input type="number" id="cancel-qty" class="input-field text-center font-bold mb-4">
-            <div id="cancel-type-btns" class="hidden grid grid-cols-2 gap-2 mb-4">
-                <button id="cancel-btn-partial" onclick="window.setCancelType('partial')" class="py-2 rounded-xl border border-bread-200 text-xs font-bold">Parcial</button>
-                <button id="cancel-btn-full" onclick="window.setCancelType('full')" class="py-2 rounded-xl border border-bread-200 text-xs font-bold">Completo</button>
+        <div class="bread-card p-10 max-w-sm w-full modal-animate">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-10 h-10 bg-red-100 text-red-500 rounded-2xl flex items-center justify-center">
+                    <i data-lucide="x-circle" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-serif font-bold">Cancelar pedido</h3>
+                    <p id="cancel-res-info" class="text-xs opacity-50 font-bold"></p>
+                </div>
             </div>
-            <div id="cancel-summary" class="hidden text-sm text-center font-bold text-red-500 mb-6"></div>
-            <div class="flex gap-3">
-                <button onclick="window.toggleModal('modal-cancel-reservation', false)" class="flex-1 py-3 font-bold opacity-60">Volver</button>
-                <button id="btn-confirm-cancel" class="flex-1 py-3 rounded-2xl bg-red-600 text-white font-bold">Confirmar</button>
+            <div class="space-y-4">
+                <div class="bg-bread-50 dark:bg-bread-900/50 p-5 rounded-3xl space-y-4">
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest mb-2 opacity-50">Unidades a cancelar</label>
+                        <input type="number" id="cancel-qty" class="input-field text-2xl text-center font-bold" min="1">
+                    </div>
+                    <div id="cancel-type-btns" class="hidden grid grid-cols-2 gap-3 pt-2 border-t border-bread-200">
+                        <button id="cancel-btn-partial" onclick="window.setCancelType('partial')"
+                            class="py-3 rounded-2xl border-2 border-bread-200 font-bold text-sm flex flex-col items-center gap-1 transition hover:border-orange-400">
+                            <span class="text-xl">✂️</span><span>Parcial</span>
+                        </button>
+                        <button id="cancel-btn-full" onclick="window.setCancelType('full')"
+                            class="py-3 rounded-2xl border-2 border-bread-200 font-bold text-sm flex flex-col items-center gap-1 transition hover:border-red-500">
+                            <span class="text-xl">🗑️</span><span>Completo</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="cancel-summary" class="hidden bg-orange-50 dark:bg-orange-900/20 p-4 rounded-2xl text-sm font-bold text-orange-700 text-center"></div>
+            </div>
+            <div class="flex gap-3 pt-6">
+                <button onclick="window.toggleModal('modal-cancel-reservation', false)" class="flex-1 py-3 font-bold opacity-60">Cerrar</button>
+                <button id="btn-confirm-cancel" class="flex-1 py-3 rounded-2xl bg-red-600 text-white font-bold shadow-lg hover:bg-red-700 transition">Confirmar</button>
             </div>
         </div>
     </div>
@@ -785,27 +808,123 @@
             }
         }
 
-        // ── Cancelaciones ──
-        window.openCancelModal = (resId) => {
-            const res = reservationsMap[resId];
-            const max = res.quantity - (res.delivered_quantity || 0);
-            document.getElementById('cancel-qty').max = max;
-            document.getElementById('cancel-qty').value = max;
-            document.getElementById('cancel-type-btns').classList.toggle('hidden', max<=1);
-            document.getElementById('btn-confirm-cancel').onclick = () => confirmCancel(res, max);
+        // ── Cancelar reserva ──────────────────────────────────────────
+        let cancelTarget = null;
+        let cancelType   = 'full';
+
+        window.openCancelModal = async (resId, isAdminAction = false) => {
+            let reservation = reservationsMap[resId];
+            if (!reservation) {
+                const { data } = await supabase.from('reservations').select('*').eq('id', resId).single();
+                reservation = data;
+            }
+            if (!reservation) return showMessage("Reserva no encontrada", "error");
+            if (reservation.status === 'entregado') return showMessage("No se puede cancelar un pedido ya entregado", "error");
+
+            cancelTarget    = { ...reservation, isAdminAction };
+            cancelType      = 'full';
+            const nombre    = isAdminAction ? getDisplayName(reservation.user_id, reservation.user_email) : (currentProfile || emailPrefix(currentUser.email));
+            const maxCancel = reservation.quantity - (reservation.delivered_quantity || 0);
+
+            document.getElementById('cancel-res-info').textContent = `${nombre} · ${reservation.quantity} ud.`;
+
+            const qtyInput    = document.getElementById('cancel-qty');
+            qtyInput.max      = maxCancel;
+            qtyInput.min      = 1;
+            qtyInput.value    = maxCancel;
+
+            const typeBox = document.getElementById('cancel-type-btns');
+            typeBox.classList.toggle('hidden', maxCancel <= 1);
+            if (maxCancel <= 1) {
+                qtyInput.disabled = true;
+                cancelType = 'full';
+            } else {
+                qtyInput.disabled = false;
+            }
+
+            document.getElementById('cancel-btn-full').className    = 'py-3 rounded-2xl border-2 border-red-500 bg-red-50 font-bold text-sm flex flex-col items-center gap-1 transition';
+            document.getElementById('cancel-btn-partial').className = 'py-3 rounded-2xl border-2 border-bread-200 font-bold text-sm flex flex-col items-center gap-1 transition hover:border-orange-400';
+
+            qtyInput.oninput = () => updateCancelSummary(maxCancel, reservation);
+            updateCancelSummary(maxCancel, reservation);
+
+            document.getElementById('btn-confirm-cancel').onclick = () => confirmCancel(reservation, maxCancel);
             window.toggleModal('modal-cancel-reservation', true);
         };
-        async function confirmCancel(res, max) {
-            const qty = parseInt(document.getElementById('cancel-qty').value);
-            if (qty >= max) await supabase.from('reservations').update({ status: 'cancelado' }).eq('id', res.id);
-            else await supabase.from('reservations').update({ quantity: res.quantity - qty }).eq('id', res.id);
-            
-            const { data: b } = await supabase.from('batches').select('remaining').eq('id', res.batch_id).single();
-            await supabase.from('batches').update({ remaining: b.remaining + qty }).eq('id', res.batch_id);
-            window.toggleModal('modal-cancel-reservation', false);
+
+        window.setCancelType = (type) => {
+            cancelType = type;
+            const qtyInput    = document.getElementById('cancel-qty');
+            const maxCancel   = parseInt(qtyInput.max);
+            const reservation = cancelTarget;
+
+            if (type === 'full') {
+                qtyInput.value    = maxCancel;
+                qtyInput.disabled = true;
+                document.getElementById('cancel-btn-full').className    = 'py-3 rounded-2xl border-2 border-red-500 bg-red-50 font-bold text-sm flex flex-col items-center gap-1 transition';
+                document.getElementById('cancel-btn-partial').className = 'py-3 rounded-2xl border-2 border-bread-200 font-bold text-sm flex flex-col items-center gap-1 transition hover:border-orange-400';
+            } else {
+                qtyInput.value    = 1;
+                qtyInput.disabled = false;
+                qtyInput.focus();
+                document.getElementById('cancel-btn-partial').className = 'py-3 rounded-2xl border-2 border-orange-400 bg-orange-50 font-bold text-sm flex flex-col items-center gap-1 transition';
+                document.getElementById('cancel-btn-full').className    = 'py-3 rounded-2xl border-2 border-bread-200 font-bold text-sm flex flex-col items-center gap-1 transition hover:border-red-500';
+            }
+            updateCancelSummary(maxCancel, reservation);
+        };
+
+        function updateCancelSummary(maxCancel, reservation) {
+            const qty     = Math.min(parseInt(document.getElementById('cancel-qty').value) || 1, maxCancel);
+            const isFull  = qty >= maxCancel;
+            const importe = qty * (reservation.price || 0);
+            const summary = document.getElementById('cancel-summary');
+            summary.classList.remove('hidden');
+            summary.innerHTML = isFull
+                ? `🗑️ Se cancelará el pedido completo<br><span class="text-xs font-normal opacity-70">${qty} ud. devueltas al stock · ${importe.toFixed(2)}€</span>`
+                : `✂️ Cancelación parcial: <strong>${qty}</strong> ud.<br><span class="text-xs font-normal opacity-70">${qty} ud. devueltas al stock · ${importe.toFixed(2)}€</span>`;
         }
 
-        // ── Render Admin ──
+        async function confirmCancel(reservation, maxCancel) {
+            const qty    = Math.min(parseInt(document.getElementById('cancel-qty').value) || 1, maxCancel);
+            const isFull = qty >= maxCancel;
+            const nombre = cancelTarget.isAdminAction
+                ? getDisplayName(reservation.user_id, reservation.user_email)
+                : (currentProfile || emailPrefix(currentUser.email));
+
+            let updateData;
+            if (isFull) {
+                updateData = { status: 'cancelado' };
+            } else {
+                const newQty   = reservation.quantity - qty;
+                const newPaid  = Math.min(reservation.paid_quantity || 0, newQty);
+                const ratio    = newQty / reservation.quantity;
+                updateData = {
+                    quantity:       newQty,
+                    paid_quantity:  newPaid,
+                    paid_metalico:  Math.round((reservation.paid_metalico || 0) * ratio * 100) / 100,
+                    paid_bizum:     Math.round((reservation.paid_bizum    || 0) * ratio * 100) / 100,
+                    is_paid:        newPaid >= newQty,
+                    status:         'reservado',
+                };
+            }
+
+            const { error: errRes } = await supabase.from('reservations').update(updateData).eq('id', reservation.id);
+            if (errRes) return showMessage("Error al cancelar: " + errRes.message, "error");
+
+            const { data: batch } = await supabase.from('batches').select('remaining').eq('id', reservation.batch_id).single();
+            if (batch) {
+                await supabase.from('batches').update({ remaining: batch.remaining + qty }).eq('id', reservation.batch_id);
+            }
+
+            window.toggleModal('modal-cancel-reservation', false);
+            showMessage(isFull
+                ? `✓ Pedido de ${nombre} cancelado — ${qty} ud. devuelta${qty > 1 ? 's' : ''} al stock`
+                : `✓ Cancelación parcial: ${qty} ud. de ${nombre} devuelta${qty > 1 ? 's' : ''} al stock`
+            );
+            isAdmin ? fetchAdminData() : fetchUserData();
+        }
+
+                // ── Render Admin ──
         function renderAdminDashboard(batches, reservations) {
             const activeBatches = batches.filter(b => b.status === 'active');
             const inactiveBatches = batches.filter(b => b.status === 'inactive');
@@ -837,7 +956,7 @@
                     <div class="flex gap-2">
                         <button onclick="window.archiveBatch('${b.id}')" class="flex-1 text-xs font-black uppercase py-3 rounded-xl bg-bread-100 dark:bg-bread-800 hover:bg-bread-200 transition">Cerrar</button>
                         <button onclick="window.sendBatchNotification('${b.id}','${b.date}',${b.price},${b.remaining})"
-                            class="flex-1 text-xs font-black uppercase py-3 rounded-xl bg-blue-100 text-blue-700 hover:bg-blue-200 transition" title="Avisar a todos los usuarios">
+                            class="flex-1 text-xs font-black uppercase py-3 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition" title="Avisar a todos los usuarios">
                             📧 Avisar
                         </button>
                         <button onclick="window.deleteBatch('${b.id}')" class="px-4 py-3 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition">
@@ -877,7 +996,7 @@
                             <div class="flex gap-2">
                                 ${!r.is_paid ? `<button onclick="window.openMarkAsPaidModal('${r.id}')" class="bg-green-600 text-white text-[9px] px-3 py-2 rounded-lg font-black uppercase hover:bg-green-700 transition">Cobrar</button>` : ''}
                                 ${r.status === 'reservado'
-                                    ? `<button onclick="window.openPartialDeliveryModal('${r.id}')" class="bg-bread-700 text-white text-[9px] px-3 py-2 rounded-lg font-black uppercase hover:bg-bread-800 transition">Entrega</button>`
+                                    ? `<button onclick="window.openPartialDeliveryModal('${r.id}')" class="bg-bread-400 text-white text-[9px] px-3 py-2 rounded-lg font-black uppercase hover:bg-bread-800 transition">Entrega</button>`
                                     : '<i data-lucide="check" class="text-green-600 w-5 h-5"></i>'}
                                 ${r.status !== 'cancelado' && r.status !== 'entregado'
                                     ? `<button onclick="window.openCancelModal('${r.id}', true)" class="bg-red-100 text-red-600 text-[9px] px-3 py-2 rounded-lg font-black uppercase hover:bg-red-600 hover:text-white transition">✕ Cancelar</button>`
@@ -981,15 +1100,15 @@
                     <div class="grid grid-cols-2 gap-3 mb-4">
                         <div class="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-2xl text-center">
                             <p class="text-xs font-black opacity-60 mb-1">💵 Metálico</p>
-                            <p class="text-lg font-serif font-bold text-yellow-700">${mTotalMet.toFixed(2)}€</p>
+                            <p class="text-lg font-serif font-bold text-yellow-600">${mTotalMet.toFixed(2)}€</p>
                         </div>
-                        <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl text-center">
+                        <div class="bg-blue-50 dark:bg-indigo-900/20 p-3 rounded-2xl text-center">
                             <p class="text-xs font-black opacity-60 mb-1">📱 Bizum</p>
-                            <p class="text-lg font-serif font-bold text-blue-700">${mTotalBiz.toFixed(2)}€</p>
+                            <p class="text-lg font-serif font-bold text-indigo-600">${mTotalBiz.toFixed(2)}€</p>
                         </div>
                     </div>
                     <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 mb-3 overflow-hidden">
-                        <div class="bg-green-500 h-1.5 rounded-full" style="width:${pct.toFixed(1)}%"></div>
+                        <div class="bg-yellow-600 h-1.5 rounded-full" style="width:${pct.toFixed(1)}%"></div>
                     </div>
                     ${mTotalPdte > 0 ? `<p class="text-xs font-black text-red-500 mb-4">✗ ${mTotalPdte.toFixed(2)}€ pendiente</p>` : `<p class="text-xs font-black text-green-600 mb-4">✓ Todo cobrado</p>`}
                     ${allDeudores.length ? `
@@ -1046,7 +1165,7 @@
 
         function renderUserMyReservations(items) {
             document.getElementById('user-my-reservations').innerHTML = items.map(r => `
-                <div class="bread-card p-6 flex justify-between items-center border-l-8 ${r.is_paid?'border-green-500':'border-red-500'}">
+                <div class="bread-card p-6 flex justify-between items-center border-l-8 ${r.is_paid?'border-green-500':'border-amber-700'}">
                     <div>
                         <p class="text-[10px] font-bold opacity-40 uppercase">${formatDate(r.batch_date)}</p>
                         <p class="text-xl font-bold">${r.quantity} <span class="text-xs font-normal opacity-50">piezas</span></p>
@@ -1054,7 +1173,7 @@
                     </div>
                     <div class="text-right">
                         <p class="text-lg font-serif font-bold text-bread-800">${(r.quantity * r.price).toFixed(2)}€</p>
-                        ${r.status==='reservado'?`<button onclick="window.openCancelModal('${r.id}')" class="text-[10px] text-red-500 font-bold mt-2">✕ Cancelar</button>`:''}
+                        ${r.status==='reservado'?`<button onclick="window.openCancelModal('${r.id}', false)" class="text-[10px] text-red-500 font-bold mt-2">✕ Cancelar</button>`:''}
                     </div>
                 </div>`).join('');
             lucide.createIcons();
