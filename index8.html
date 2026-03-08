@@ -799,27 +799,27 @@ function renderAdminDashboard(batches, reservations) {
   document.getElementById('admin-total-debt').textContent     = totalDeuda.toFixed(2) + '€';
 
   // Horneos activos
-  document.getElementById('admin-batches-list').innerHTML = activeBatches.length
-    ? activeBatches.map(b => `
-      <div class="js-batch-card">
-        <div class="js-batch-head">
-          <span class="js-batch-active-badge">Activo</span>
-          <p class="js-batch-date-label">${formatDate(b.date)}</p>
-        </div>
-        <div class="js-batch-stat">
-          <p class="js-batch-remaining">${b.remaining}<span> / ${b.total}</span></p>
-          <p class="js-batch-pieces-label">Piezas Disponibles</p>
-          <p class="js-batch-price">${b.price.toFixed(2)}€/ud</p>
-        </div>
-        <div class="js-batch-actions">
-          <button onclick="window.archiveBatch('${b.id}')" class="js-btn-cerrar">Cerrar</button>
-          <button onclick="window.sendBatchNotification('${b.id}','${b.date}',${b.price},${b.remaining})" class="js-btn-avisar" title="Avisar a todos los usuarios">📧 Avisar</button>
-          <button onclick="window.deleteBatch('${b.id}')" class="js-btn-borrar">
-            <i data-lucide="trash-2" style="width:1rem;height:1rem;pointer-events:none"></i>
-          </button>
-        </div>
-      </div>`).join('')
-    : '<p style="opacity:.3;font-style:italic;grid-column:1/-1;text-align:center;padding:2rem">No hay horneos activos.</p>';
+	document.getElementById('admin-batches-list').innerHTML = activeBatches.length
+	    ? activeBatches.map(b => `
+	      <div class="card batch-card">
+	        <div class="batch-top">
+	          <span class="batch-status">Activo</span>
+	          <p class="batch-date" style="font-size:.875rem;opacity:.5;font-family:'Plus Jakarta Sans',sans-serif;">${formatDate(b.date)}</p>
+	        </div>
+	        <div class="batch-stat">
+	          <p class="batch-big">${b.remaining}<span> / ${b.total}</span></p>
+	          <p style="font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;opacity:.4;">Piezas Disponibles</p>
+	          <p style="font-size:1.125rem;font-weight:700;margin-top:.25rem;">${b.price.toFixed(2)}€/ud</p>
+	        </div>
+	        <div class="batch-actions">
+	          <button onclick="window.archiveBatch('${b.id}')" class="btn-close-batch">Cerrar</button>
+	          <button onclick="window.sendBatchNotification('${b.id}','${b.date}',${b.price},${b.remaining})" class="btn-notify-batch" title="Avisar a todos los usuarios">📧 Avisar</button>
+	          <button onclick="window.deleteBatch('${b.id}')" style="padding:.7rem;border-radius:.75rem;background:#fee2e2;color:#dc2626;transition:background .2s;" onmouseover="this.style.background='#dc2626';this.style.color='#fff'" onmouseout="this.style.background='#fee2e2';this.style.color='#dc2626'">
+	            <i data-lucide="trash-2" style="width:1rem;height:1rem;pointer-events:none"></i>
+	          </button>
+	        </div>
+	      </div>`).join('')
+	    : '<p style="opacity:.3;font-style:italic;grid-column:1/-1;text-align:center;padding:2rem">No hay horneos activos.</p>';
 
   // Tabla reservas activas
   const activeRes = reservations.filter(r => r.batch_status === 'active');
@@ -992,37 +992,37 @@ function renderAdminDashboard(batches, reservations) {
 }
 
 // ── Render Usuario ──
-function renderUserAvailable(items) {
-  document.getElementById('user-available-batches').innerHTML = items.map(b => `
-    <div class="js-avail-card">
-      <p class="js-avail-label">Próximo Horneo</p>
-      <h4 class="js-avail-date">${formatDate(b.date)}</h4>
-      <div class="js-avail-footer">
-        <div style="text-align:center">
-          <p class="js-avail-remaining-num">${b.remaining}</p>
-          <p class="js-avail-remaining-lbl">Quedan</p>
-        </div>
-        <button onclick="window.openReserveModal('${b.id}','${b.date}',${b.remaining},${b.price})" class="btn-primary" style="padding:.75rem 2rem;border-radius:1.75rem">Reservar (${b.price.toFixed(2)}€)</button>
-      </div>
-    </div>`).join('');
-  lucide.createIcons();
-}
+	function renderUserAvailable(items) {
+	  document.getElementById('user-available-batches').innerHTML = items.map(b => `
+	    <div class="card avail-card">
+	      <p class="avail-date-label">Próximo Horneo</p>
+	      <h4 class="avail-date">${formatDate(b.date)}</h4>
+	      <div class="avail-footer">
+	        <div class="avail-remaining">
+	          <p class="avail-remaining-num">${b.remaining}</p>
+	          <p class="avail-remaining-label">Quedan</p>
+	        </div>
+	        <button onclick="window.openReserveModal('${b.id}','${b.date}',${b.remaining},${b.price})" class="btn-primary" style="padding:1rem 2rem;font-size:1rem;">Reservar (${b.price.toFixed(2)}€)</button>
+	      </div>
+	    </div>`).join('');
+	  lucide.createIcons();
+	}
+	
+	function renderUserMyReservations(items) {
+	  document.getElementById('user-my-reservations').innerHTML = items.map(r => `
+	    <div class="card my-res-card" style="border-left:8px solid ${r.is_paid ? '#16a34a' : '#b45309'};">
+	      <p class="my-res-date">${formatDate(r.batch_date)}</p>
+	      <p class="my-res-qty">${r.quantity} <span style="font-size:.875rem;font-weight:400;opacity:.5;">piezas</span></p>
+	      <div style="display:flex;gap:.25rem;flex-wrap:wrap;">${methodBadges(r)}</div>
+	      <div style="display:flex;justify-content:space-between;align-items:center;">
+	        <span class="my-res-status ${r.status === 'entregado' ? 'entregado' : r.status === 'cancelado' ? 'cancelado' : 'reservado'}">${r.status}</span>
+	        <p style="font-family:'Instrument Serif',serif;font-size:1.125rem;font-weight:700;color:var(--b800);">${(r.quantity * r.price).toFixed(2)}€</p>
+	      </div>
+	      ${r.status === 'reservado' ? `<button onclick="window.openCancelModal('${r.id}', false)" class="my-res-cancel">✕ Cancelar</button>` : ''}
+	    </div>`).join('');
+	  lucide.createIcons();
+	}
 
-function renderUserMyReservations(items) {
-  document.getElementById('user-my-reservations').innerHTML = items.map(r => `
-    <div class="js-my-res-card ${r.is_paid ? 'js-my-res-paid' : 'js-my-res-pending'}">
-      <div>
-        <p class="js-my-res-date">${formatDate(r.batch_date)}</p>
-        <p class="js-my-res-qty">${r.quantity} <span>piezas</span></p>
-        <div class="js-my-res-badges">${methodBadges(r)}</div>
-      </div>
-      <div>
-        <p class="js-my-res-amount">${(r.quantity * r.price).toFixed(2)}€</p>
-        ${r.status === 'reservado' ? `<button onclick="window.openCancelModal('${r.id}', false)" class="js-my-res-cancel">✕ Cancelar</button>` : ''}
-      </div>
-    </div>`).join('');
-  lucide.createIcons();
-}
 
 // ── PDF ──
 window.generatePrintablePDF = async () => {
