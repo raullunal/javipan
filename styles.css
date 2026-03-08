@@ -487,3 +487,19 @@ details[open] .chevron-icon{transform:rotate(180deg)}
 .print-table{width:100%;border-collapse:collapse;margin-top:20px}
 .print-table th{background:#EADDCF;padding:12px 8px;text-align:left;font-weight:700;border:1px solid #945D31}
 .print-table td{padding:10px 8px;border:1px solid #ddd}
+
+/* ── Batch stat box ─────────────────────────── */
+.batch-stat {
+  text-align:center;
+  padding:1rem;
+  background:var(--b50);
+  border-radius:1.75rem;
+  margin-bottom:1rem;
+  margin-top:.75rem;
+}
+.dark .batch-stat { background:rgba(0,0,0,.2); }
+
+/* ── Section wrapper spacing ────────────────── */
+#view-admin { padding-top: 1rem; }
+.section-title { margin-top: 0; }
+
