@@ -799,6 +799,1048 @@ function renderAdminDashboard(batches, reservations) {
   document.getElementById('admin-total-debt').textContent     = totalDeuda.toFixed(2) + '€';
 
   // Horneos activos
+  document.getElementById('admin-batches-list').innerHTML = activeBatches.length
+    ? activeBatches.map(b => `
+      <div class="card batch-card">
+        <div class="batch-top">
+          <span class="batch-status">Activo</span>
+          <p class="batch-date" style="font-size:.875rem;opacity:.5;font-family:'Plus Jakarta Sans',sans-serif;">${formatDate(b.date)}</p>
+        </div>
+        <div class="batch-stat">
+          <p class="batch-big">${b.remaining}<span> / ${b.total}</span></p>
+          <p style="font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.1em;opacity:.4;">Piezas Disponibles</p>
+          <p style="font-size:1.125rem;font-weight:700;margin-top:.25rem;">${b.price.toFixed(2)}€/ud</p>
+        </div>
+        <div class="batch-actions">
+          <button onclick="window.archiveBatch('${b.id}')" class="btn-close-batch">Cerrar</button>
+          <button onclick="window.sendBatchNotification('${b.id}','${b.date}',${b.price},${b.remaining})" class="btn-notify-batch" title="Avisar a todos los usuarios">📧 Avisar</button>
+          <button onclick="window.deleteBatch('${b.id}')" style="padding:.7rem;border-radius:.75rem;background:#fee2e2;color:#dc2626;transition:background .2s;" onmouseover="this.style.background='#dc2626';this.style.color='#fff'" onmouseout="this.style.background='#fee2e2';this.style.color='#dc2626'">
+            <i data-lucide="trash-2" style="width:1rem;height:1rem;pointer-events:none"></i>
+          </button>
+        </div>
+      </div>`).join('')
+    : '<p style="opacity:.3;font-style:italic;grid-column:1/-1;text-align:center;padding:2rem">No hay horneos activos.</p>';
+
+  // Tabla reservas activas
+  const activeRes = reservations.filter(r => r.batch_status === 'active');
+  document.getElementById('admin-reservations-list').innerHTML = activeRes.length
+    ? activeRes.map(r => {
+        const dName   = getDisplayName(r.user_id, r.user_email);
+        const total   = r.quantity * r.price;
+        const cobrado = (r.paid_quantity || 0) * r.price;
+        const pdte    = (r.quantity - (r.paid_quantity || 0)) * r.price;
+        const hayParc = (r.paid_quantity || 0) > 0 && !r.is_paid;
+        return `
+        <tr>
+          <td><p class="td-name-main">${dName}</p><p class="td-email-sub">${r.user_email}</p></td>
+          <td><span class="td-qty-big">${r.quantity}</span><span class="td-qty-sub"> (${r.delivered_quantity||0} entr.)</span></td>
+          <td>
+            <p class="td-amount-main">${total.toFixed(2)}€</p>
+            ${hayParc ? `<p class="td-paid-ok">✓ ${cobrado.toFixed(2)}€</p><p class="td-debt-pending">✗ ${pdte.toFixed(2)}€ pdte.</p>` : ''}
+            <div class="td-badges">${methodBadges(r)}</div>
+          </td>
+          <td class="td-date-text">${formatDate(r.batch_date).split(' ').slice(1).join(' ')}</td>
+          <td><span class="status-pill ${r.is_paid ? 'paid' : 'pending'}">${r.is_paid ? 'Pagado' : 'Pendiente'}</span></td>
+          <td>
+            <div class="td-actions-wrap">
+              ${!r.is_paid ? `<button onclick="window.openMarkAsPaidModal('${r.id}')" class="btn-cobrar">Cobrar</button>` : ''}
+              ${r.status === 'reservado'
+                ? `<button onclick="window.openPartialDeliveryModal('${r.id}')" class="btn-entregar">Entrega</button>`
+                : `<i data-lucide="check" style="color:#16a34a;width:1.25rem;height:1.25rem"></i>`}
+              ${r.status !== 'cancelado' && r.status !== 'entregado'
+                ? `<button onclick="window.openCancelModal('${r.id}', true)" class="btn-cancelar">✕ Cancelar</button>`
+                : ''}
+            </div>
+          </td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" style="padding:3rem;text-align:center;font-style:italic;opacity:.3">No hay pedidos registrados</td></tr>';
+
+  // Histórico
+  const byMonth = {};
+  inactiveBatches.forEach(b => {
+    const m = getMonth(b.date);
+    if (!byMonth[m]) byMonth[m] = [];
+    byMonth[m].push(b);
+  });
+
+  const histHtml = Object.keys(byMonth).sort().reverse().map(month => {
+    const monthBatches = byMonth[month];
+    let mTotalMet = 0, mTotalBiz = 0, mTotalPdte = 0;
+    const allDeudores = [];
+    monthBatches.forEach(b => {
+      const bRes = reservations.filter(r => r.batch_id === b.id);
+      bRes.forEach(r => {
+        mTotalMet  += (r.paid_metalico || 0) * r.price;
+        mTotalBiz  += (r.paid_bizum    || 0) * r.price;
+        mTotalPdte += (r.quantity - (r.paid_quantity || 0)) * r.price;
+        if (!r.is_paid) allDeudores.push({ ...r, batch_date: b.date });
+      });
+    });
+    const mTotalCobrado = mTotalMet + mTotalBiz;
+    const mLabel = formatMonth(monthBatches[0].date);
+    const pct = (mTotalCobrado + mTotalPdte) > 0 ? Math.min(100, (mTotalCobrado / (mTotalCobrado + mTotalPdte)) * 100) : 100;
+
+    const batchDetails = monthBatches.map(b => {
+      const bRes     = reservations.filter(r => r.batch_id === b.id);
+      const bCobrado = bRes.reduce((s,r) => s + (r.paid_quantity  || 0) * r.price, 0);
+      const bMet     = bRes.reduce((s,r) => s + (r.paid_metalico  || 0) * r.price, 0);
+      const bBiz     = bRes.reduce((s,r) => s + (r.paid_bizum     || 0) * r.price, 0);
+      const bPdte    = bRes.reduce((s,r) => s + (r.quantity - (r.paid_quantity || 0)) * r.price, 0);
+      return `
+      <details class="month">
+        <summary>
+          <div class="month-info">
+            <svg class="chevron-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            <div>
+              <p class="month-name">${formatDate(b.date)}</p>
+              <p class="month-meta">${bRes.length} reserva${bRes.length!==1?'s':''} · ${b.price.toFixed(2)}€/ud</p>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <p class="month-amount">${bCobrado.toFixed(2)}€</p>
+            ${bPdte > 0 ? `<p class="month-debt">-${bPdte.toFixed(2)}€ pdte.</p>` : ''}
+          </div>
+        </summary>
+        <div class="month-body">
+          <div style="display:flex;gap:.25rem;margin-bottom:.5rem;">
+            ${bMet > 0 ? `<span class="badge badge-metalico">💵 ${bMet.toFixed(2)}€</span>` : ''}
+            ${bBiz > 0 ? `<span class="badge badge-bizum">📱 ${bBiz.toFixed(2)}€</span>` : ''}
+          </div>
+          ${bRes.map(r => {
+            const dName  = getDisplayName(r.user_id, r.user_email);
+            const rTotal = r.quantity * r.price;
+            const rPdte  = (r.quantity - (r.paid_quantity || 0)) * r.price;
+            return `
+            <div class="month-row" style="background:rgba(255,255,255,.7);border-radius:.75rem;padding:.5rem .75rem;border:1px solid var(--b100);">
+              <div>
+                <p class="month-row-name">${dName}</p>
+                <div class="month-row-badges">${methodBadges(r)}</div>
+              </div>
+              <div style="text-align:right;">
+                <p style="font-weight:700;font-size:.8rem;color:var(--b800);">${rTotal.toFixed(2)}€</p>
+                ${rPdte > 0 ? `<p style="font-size:.55rem;font-weight:900;color:#ea580c;">-${rPdte.toFixed(2)}€ pdte.</p>` : ''}
+                <span class="month-row-status ${r.is_paid?'done':'pend'}">${r.is_paid?'Pagado':'Pendiente'}</span>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </details>`;
+    }).join('');
+
+    return `
+    <div class="card" style="padding:1.5rem;box-shadow:0 4px 20px rgba(0,0,0,.08);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">
+        <div>
+          <h4 style="font-family:'Instrument Serif',serif;font-size:1.25rem;font-weight:700;text-transform:capitalize;">${mLabel}</h4>
+          <p style="font-size:.65rem;font-weight:900;opacity:.4;text-transform:uppercase;letter-spacing:.05em;">${monthBatches.length} horneo${monthBatches.length!==1?'s':''}</p>
+        </div>
+        <div style="text-align:right;">
+          <p style="font-family:'Instrument Serif',serif;font-size:1.25rem;font-weight:700;color:#15803d;">${mTotalCobrado.toFixed(2)}€</p>
+          <p style="font-size:.6rem;font-weight:900;opacity:.4;text-transform:uppercase;">cobrado</p>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem;">
+        <div style="background:var(--b50);border-radius:1rem;padding:.75rem;text-align:center;">
+          <p style="font-size:.65rem;font-weight:900;opacity:.5;">💵 Metálico</p>
+          <p style="font-weight:700;font-size:.9rem;">${mTotalMet.toFixed(2)}€</p>
+        </div>
+        <div style="background:var(--b50);border-radius:1rem;padding:.75rem;text-align:center;">
+          <p style="font-size:.65rem;font-weight:900;opacity:.5;">📱 Bizum</p>
+          <p style="font-weight:700;font-size:.9rem;">${mTotalBiz.toFixed(2)}€</p>
+        </div>
+      </div>
+      <div style="background:var(--b100);border-radius:9999px;height:.4rem;margin-bottom:.75rem;overflow:hidden;">
+        <div style="background:var(--b700);height:100%;border-radius:9999px;width:${pct.toFixed(1)}%;transition:width .5s;"></div>
+      </div>
+      ${mTotalPdte > 0
+        ? `<p style="font-size:.75rem;font-weight:900;color:#ea580c;margin-bottom:1rem;">✗ ${mTotalPdte.toFixed(2)}€ pendiente</p>`
+        : `<p style="font-size:.75rem;font-weight:900;color:#16a34a;margin-bottom:1rem;">✓ Todo cobrado</p>`}
+      ${allDeudores.length ? `
+      <div style="background:#fff7ed;border-radius:1.25rem;padding:1rem;margin-bottom:1rem;">
+        <p style="font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#c2410c;margin-bottom:.5rem;">Deudores del mes (${allDeudores.length})</p>
+        ${allDeudores.map(m => {
+          const dName = getDisplayName(m.user_id, m.user_email);
+          const debe  = (m.quantity - (m.paid_quantity || 0)) * m.price;
+          return `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem 0;border-bottom:1px solid rgba(234,221,207,.4);">
+            <div>
+              <p style="font-weight:700;font-size:.8rem;">${dName}</p>
+              <p style="font-size:.6rem;opacity:.4;">${formatDate(m.batch_date)}</p>
+              <div style="margin-top:.2rem;">${methodBadges(m)}</div>
+            </div>
+            <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:.35rem;">
+              <span style="font-weight:900;color:#ea580c;font-size:.85rem;">${debe.toFixed(2)}€</span>
+              <button onclick="window.openMarkAsPaidModal('${m.id}')" class="btn-cobrar" style="font-size:.55rem;padding:.35rem .6rem;border-radius:.5rem;">Cobrar</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+      <p style="font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em;opacity:.4;margin-bottom:.5rem;">Detalle de horneos</p>
+      <div style="display:flex;flex-direction:column;gap:.5rem;">${batchDetails}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('admin-historical-list').innerHTML =
+    histHtml || '<p style="text-align:center;opacity:.4;font-style:italic;padding:2rem">Historial vacío.</p>';
+  lucide.createIcons();
+}
+
+// ── Render Usuario ──
+function renderUserAvailable(items) {
+  document.getElementById('user-available-batches').innerHTML = items.map(b => `
+    <div class="card avail-card">
+      <p class="avail-date-label">Próximo Horneo</p>
+      <h4 class="avail-date">${formatDate(b.date)}</h4>
+      <div class="avail-footer">
+        <div class="avail-remaining">
+          <p class="avail-remaining-num">${b.remaining}</p>
+          <p class="avail-remaining-label">Quedan</p>
+        </div>
+        <button onclick="window.openReserveModal('${b.id}','${b.date}',${b.remaining},${b.price})" class="btn-primary" style="padding:1rem 2rem;font-size:1rem;">Reservar (${b.price.toFixed(2)}€)</button>
+      </div>
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+function renderUserMyReservations(items) {
+  document.getElementById('user-my-reservations').innerHTML = items.map(r => `
+    <div class="card my-res-card" style="border-left:8px solid ${r.is_paid ? '#16a34a' : '#b45309'};">
+      <p class="my-res-date">${formatDate(r.batch_date)}</p>
+      <p class="my-res-qty">${r.quantity} <span style="font-size:.875rem;font-weight:400;opacity:.5;">piezas</span></p>
+      <div style="display:flex;gap:.25rem;flex-wrap:wrap;">${methodBadges(r)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="my-res-status ${r.status === 'entregado' ? 'entregado' : r.status === 'cancelado' ? 'cancelado' : 'reservado'}">${r.status}</span>
+        <p style="font-family:'Instrument Serif',serif;font-size:1.125rem;font-weight:700;color:var(--b800);">${(r.quantity * r.price).toFixed(2)}€</p>
+      </div>
+      ${r.status === 'reservado' ? `<button onclick="window.openCancelModal('${r.id}', false)" class="my-res-cancel">✕ Cancelar</button>` : ''}
+    </div>`).join('');
+  lucide.createIcons();
+}
+
+// ── PDF ──
+window.generatePrintablePDF = async () => {
+  if (!currentReservationsForPrint?.length) return;
+  const container = document.getElementById('print-container');
+  container.innerHTML = `<div class="print-page"><div class="print-header"><h1>🍞 El Horno Artesano</h1></div>
+    <table class="print-table">
+      <thead><tr><th>Cliente</th><th>Cant.</th><th>Importe</th><th>Estado</th></tr></thead>
+      <tbody>${currentReservationsForPrint.map(r =>`<tr><td>${getDisplayName(r.user_id,r.user_email)}</td><td>${r.quantity}</td><td>${(r.quantity*r.price).toFixed(2)}€</td><td>${r.is_paid?'Pagado':'Pendiente'}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+  setTimeout(async () => {
+    const canvas = await html2canvas(container, { scale: 2 });
+    const pdf    = new window.jspdf.jsPDF();
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, (canvas.height * 210) / canvas.width);
+    pdf.save(`Pedidos_${new Date().toISOString().split('T')[0]}.pdf`);
+    showMessage('PDF generado ✓');
+  }, 500);
+};
+
+init();
+
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El Horno Artesano - Gestión Económica</title>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="loading-inner">
+    <svg xmlns="http://www.w3.org/2000/svg" id="bread-loaf" viewBox="0 0 256 256" fill="currentColor">
+      <path 
+   d="m 74.896484,12.298828 c -9.539633,0.306068 -19.212194,2.288953 -27.585415,7.01584 -4.791875,2.930021 -9.418512,6.121415 -14.099432,9.223542 -5.14524,3.4881 -10.323408,6.93718 -15.338366,10.610428 -3.558539,2.654457 -6.775584,5.990473 -8.499416,10.144875 -2.0260726,4.662202 -1.7784009,10.205331 0.613272,14.685998 1.036415,2.105324 2.768763,3.834738 3.409357,6.137677 0.942165,2.804115 0.501449,5.796567 0.603516,8.694531 0.01182,8.947413 -0.02357,17.895717 0.01758,26.842581 0.192164,4.58544 3.591712,8.79399 8.028791,9.95706 2.416707,0.67339 4.951923,0.30179 7.424334,0.39841 16.044857,-0.009 32.09023,0.0182 48.134766,-0.0137 2.473372,-0.10332 4.835867,-1.1501 6.716797,-2.72851 8.37547,-6.00098 16.783564,-11.95776 25.138674,-17.98633 3.03919,-2.42374 4.73479,-6.341769 4.53906,-10.211719 0.0157,-9.853887 -0.0314,-19.709067 0.0236,-29.562149 0.11493,-2.670617 1.22434,-5.205038 2.84138,-7.304183 2.78333,-4.059371 3.87609,-9.296683 2.61748,-14.087965 -1.40527,-5.606309 -5.53356,-10.109907 -10.22265,-13.277343 -7.274,-4.867007 -15.941948,-7.249982 -24.57238,-8.174239 -3.251094,-0.340279 -6.523433,-0.448283 -9.790906,-0.364824 z M 77,20.269531 c 8.615039,0.0474 17.380715,1.639656 25.05273,5.685547 3.69671,2.035153 7.34145,4.732078 9.15039,8.666016 1.29514,2.762372 0.93827,6.104076 -0.68507,8.651882 -1.3257,1.913676 -2.60908,3.894235 -3.34904,6.123072 -1.06021,2.854086 -1.2576,5.926828 -1.16901,8.944186 -0.0125,9.262708 0.0249,18.52686 -0.0187,27.788665 -0.0954,1.591082 -1.2243,2.871675 -2.544,3.649748 C 98.291552,93.450739 93.145776,97.12283 88,100.79492 c 0.0157,-9.185526 -0.03141,-18.372347 0.02356,-27.557069 0.115002,-2.672026 1.226108,-5.207309 2.843203,-7.308175 2.754081,-4.027752 3.861444,-9.208303 2.643164,-13.967493 C 92.150891,46.361772 88.060867,41.840699 83.397585,38.663937 76.478801,33.976934 68.246635,31.581763 60.019832,30.545005 55.068603,29.936451 50.056595,29.849 45.083984,30.234375 48.495002,28.01726 51.836031,25.610049 55.663178,24.146499 62.41885,21.435639 69.744491,20.301011 77,20.269531 Z M 51,38 c 8.328146,0.04303 16.78497,1.535238 24.276474,5.283752 3.888542,2.010932 7.733797,4.701851 9.758682,8.704529 1.391825,2.695605 1.230559,6.042473 -0.30229,8.643535 -1.046442,1.714441 -2.313081,3.309757 -3.052552,5.199839 -1.384441,3.077605 -1.802238,6.49093 -1.680314,9.839048 -0.01303,9.892797 0.02606,19.786965 -0.01953,29.678907 -0.130025,1.65896 -1.794014,2.86981 -3.411719,2.66016 -17.232593,-0.0116 -34.466328,0.0232 -51.698207,-0.0174 -1.742322,-0.003 -3.099795,-1.73112 -2.870543,-3.4236 -0.01569,-10.516344 0.03136,-21.033753 -0.02348,-31.549435 -0.157803,-4.198947 -1.729271,-8.276814 -4.245989,-11.620391 -1.744244,-2.526146 -2.291412,-5.915896 -1.047676,-8.77254 1.664461,-3.916721 5.205179,-6.645211 8.812602,-8.685733 6.742012,-3.714429 14.440604,-5.398006 22.07741,-5.845662 C 48.714685,38.034875 49.856748,38.01005 51,38 Z M 36.486328,48.011719 c -4.59828,0.150335 -8.846178,3.518944 -10.057479,7.953856 -1.275466,4.21687 0.331261,9.087612 3.849827,11.733683 3.564686,2.847861 8.931451,3.065483 12.715997,0.517626 3.704109,-2.347895 5.702266,-7.04094 4.79916,-11.337022 -0.835312,-4.566127 -4.85329,-8.308995 -9.472356,-8.79809 -0.608105,-0.07704 -1.222954,-0.09511 -1.835149,-0.07005 z m 31.408203,3.990234 c -3.087383,-0.01561 -5.853891,2.694056 -5.886861,5.78396 -0.187953,3.090512 2.389953,5.997669 5.478658,6.190649 3.075529,0.33584 6.11528,-2.087055 6.453274,-5.165735 0.498474,-3.0551 -1.778512,-6.207777 -4.83218,-6.705358 -0.400575,-0.07104 -0.805817,-0.111879 -1.212891,-0.103516 z m -30.576172,4.017578 c 1.972529,0.138035 3.302209,2.486293 2.396113,4.24637 -0.772198,1.850018 -3.47428,2.320323 -4.833613,0.85324 -1.473053,-1.363638 -0.992015,-4.075857 0.867741,-4.840587 0.487253,-0.230142 1.035103,-0.308253 1.569759,-0.259023 z m 21.066407,21.994141 c -5.04988,0.178514 -9.773093,3.611015 -11.52766,8.344744 -1.836747,4.642468 -0.651886,10.27672 2.904983,13.781764 3.445648,3.57014 9.01637,4.82432 13.661739,3.08443 4.785473,-1.67762 8.312957,-6.374714 8.552154,-11.445783 0.365055,-5.017151 -2.513784,-10.059786 -7.001632,-12.321202 -2.016216,-1.0578 -4.317087,-1.548447 -6.589584,-1.443953 z m -24.460938,7.988281 c -2.372875,-0.01421 -4.35592,2.40903 -3.857422,4.732422 0.34249,2.306283 2.944387,3.884651 5.146485,3.121094 2.268849,-0.64455 3.510886,-3.47546 2.41978,-5.570699 -0.648536,-1.404656 -2.161616,-2.338063 -3.708843,-2.282817 z m 25.34375,0.0059 c 2.765633,0.07355 5.076268,2.780855 4.703125,5.525391 -0.221691,2.74779 -3.025366,4.90597 -5.740234,4.408203 -2.681336,-0.353605 -4.696811,-3.15314 -4.154143,-5.809352 0.390496,-2.430322 2.730178,-4.300268 5.191252,-4.124242 z" />
+    </svg>
+    <p class="serif italic">Atemperando el horno...</p>
+  </div>
+</div>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="hero-img"></div>
+  <div class="hero-grad"></div>
+  <div class="hero-body">
+    <div class="hero-icon">
+      <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+        <path 
+   d="m 74.896484,12.298828 c -9.539633,0.306068 -19.212194,2.288953 -27.585415,7.01584 -4.791875,2.930021 -9.418512,6.121415 -14.099432,9.223542 -5.14524,3.4881 -10.323408,6.93718 -15.338366,10.610428 -3.558539,2.654457 -6.775584,5.990473 -8.499416,10.144875 -2.0260726,4.662202 -1.7784009,10.205331 0.613272,14.685998 1.036415,2.105324 2.768763,3.834738 3.409357,6.137677 0.942165,2.804115 0.501449,5.796567 0.603516,8.694531 0.01182,8.947413 -0.02357,17.895717 0.01758,26.842581 0.192164,4.58544 3.591712,8.79399 8.028791,9.95706 2.416707,0.67339 4.951923,0.30179 7.424334,0.39841 16.044857,-0.009 32.09023,0.0182 48.134766,-0.0137 2.473372,-0.10332 4.835867,-1.1501 6.716797,-2.72851 8.37547,-6.00098 16.783564,-11.95776 25.138674,-17.98633 3.03919,-2.42374 4.73479,-6.341769 4.53906,-10.211719 0.0157,-9.853887 -0.0314,-19.709067 0.0236,-29.562149 0.11493,-2.670617 1.22434,-5.205038 2.84138,-7.304183 2.78333,-4.059371 3.87609,-9.296683 2.61748,-14.087965 -1.40527,-5.606309 -5.53356,-10.109907 -10.22265,-13.277343 -7.274,-4.867007 -15.941948,-7.249982 -24.57238,-8.174239 -3.251094,-0.340279 -6.523433,-0.448283 -9.790906,-0.364824 z M 77,20.269531 c 8.615039,0.0474 17.380715,1.639656 25.05273,5.685547 3.69671,2.035153 7.34145,4.732078 9.15039,8.666016 1.29514,2.762372 0.93827,6.104076 -0.68507,8.651882 -1.3257,1.913676 -2.60908,3.894235 -3.34904,6.123072 -1.06021,2.854086 -1.2576,5.926828 -1.16901,8.944186 -0.0125,9.262708 0.0249,18.52686 -0.0187,27.788665 -0.0954,1.591082 -1.2243,2.871675 -2.544,3.649748 C 98.291552,93.450739 93.145776,97.12283 88,100.79492 c 0.0157,-9.185526 -0.03141,-18.372347 0.02356,-27.557069 0.115002,-2.672026 1.226108,-5.207309 2.843203,-7.308175 2.754081,-4.027752 3.861444,-9.208303 2.643164,-13.967493 C 92.150891,46.361772 88.060867,41.840699 83.397585,38.663937 76.478801,33.976934 68.246635,31.581763 60.019832,30.545005 55.068603,29.936451 50.056595,29.849 45.083984,30.234375 48.495002,28.01726 51.836031,25.610049 55.663178,24.146499 62.41885,21.435639 69.744491,20.301011 77,20.269531 Z M 51,38 c 8.328146,0.04303 16.78497,1.535238 24.276474,5.283752 3.888542,2.010932 7.733797,4.701851 9.758682,8.704529 1.391825,2.695605 1.230559,6.042473 -0.30229,8.643535 -1.046442,1.714441 -2.313081,3.309757 -3.052552,5.199839 -1.384441,3.077605 -1.802238,6.49093 -1.680314,9.839048 -0.01303,9.892797 0.02606,19.786965 -0.01953,29.678907 -0.130025,1.65896 -1.794014,2.86981 -3.411719,2.66016 -17.232593,-0.0116 -34.466328,0.0232 -51.698207,-0.0174 -1.742322,-0.003 -3.099795,-1.73112 -2.870543,-3.4236 -0.01569,-10.516344 0.03136,-21.033753 -0.02348,-31.549435 -0.157803,-4.198947 -1.729271,-8.276814 -4.245989,-11.620391 -1.744244,-2.526146 -2.291412,-5.915896 -1.047676,-8.77254 1.664461,-3.916721 5.205179,-6.645211 8.812602,-8.685733 6.742012,-3.714429 14.440604,-5.398006 22.07741,-5.845662 C 48.714685,38.034875 49.856748,38.01005 51,38 Z M 36.486328,48.011719 c -4.59828,0.150335 -8.846178,3.518944 -10.057479,7.953856 -1.275466,4.21687 0.331261,9.087612 3.849827,11.733683 3.564686,2.847861 8.931451,3.065483 12.715997,0.517626 3.704109,-2.347895 5.702266,-7.04094 4.79916,-11.337022 -0.835312,-4.566127 -4.85329,-8.308995 -9.472356,-8.79809 -0.608105,-0.07704 -1.222954,-0.09511 -1.835149,-0.07005 z m 31.408203,3.990234 c -3.087383,-0.01561 -5.853891,2.694056 -5.886861,5.78396 -0.187953,3.090512 2.389953,5.997669 5.478658,6.190649 3.075529,0.33584 6.11528,-2.087055 6.453274,-5.165735 0.498474,-3.0551 -1.778512,-6.207777 -4.83218,-6.705358 -0.400575,-0.07104 -0.805817,-0.111879 -1.212891,-0.103516 z m -30.576172,4.017578 c 1.972529,0.138035 3.302209,2.486293 2.396113,4.24637 -0.772198,1.850018 -3.47428,2.320323 -4.833613,0.85324 -1.473053,-1.363638 -0.992015,-4.075857 0.867741,-4.840587 0.487253,-0.230142 1.035103,-0.308253 1.569759,-0.259023 z m 21.066407,21.994141 c -5.04988,0.178514 -9.773093,3.611015 -11.52766,8.344744 -1.836747,4.642468 -0.651886,10.27672 2.904983,13.781764 3.445648,3.57014 9.01637,4.82432 13.661739,3.08443 4.785473,-1.67762 8.312957,-6.374714 8.552154,-11.445783 0.365055,-5.017151 -2.513784,-10.059786 -7.001632,-12.321202 -2.016216,-1.0578 -4.317087,-1.548447 -6.589584,-1.443953 z m -24.460938,7.988281 c -2.372875,-0.01421 -4.35592,2.40903 -3.857422,4.732422 0.34249,2.306283 2.944387,3.884651 5.146485,3.121094 2.268849,-0.64455 3.510886,-3.47546 2.41978,-5.570699 -0.648536,-1.404656 -2.161616,-2.338063 -3.708843,-2.282817 z m 25.34375,0.0059 c 2.765633,0.07355 5.076268,2.780855 4.703125,5.525391 -0.221691,2.74779 -3.025366,4.90597 -5.740234,4.408203 -2.681336,-0.353605 -4.696811,-3.15314 -4.154143,-5.809352 0.390496,-2.430322 2.730178,-4.300268 5.191252,-4.124242 z" />
+      </svg>
+    </div>
+    <h1 class="hero-title serif">El Horno Artesano</h1>
+    <p class="hero-sub">Masa madre, fermentación lenta y mucho cariño.</p>
+  </div>
+</div>
+
+<!-- Nav -->
+<nav class="main-nav">
+  <div class="nav-brand">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor">
+      <path d="M232,104a64.14,64.14,0,0,0-36.56-57.94C188.46,43.23,178.6,40,168,40H88c-10.6,0-20.46,3.23-27.44,6.06A64.14,64.14,0,0,0,24,104v32a16,16,0,0,0,16,16h8v48a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V152h8a16,16,0,0,0,16-16ZM66.42,54.76C72,52.44,80.12,48,88,48H168c7.88,0,16,4.44,21.58,6.76A48.09,48.09,0,0,1,216,104H40A48.09,48.09,0,0,1,66.42,54.76ZM192,200H64V152H192ZM216,136H40V120H216Z"></path>
+    </svg>
+    <span>Artesano</span>
+  </div>
+  <div class="nav-right">
+    <button onclick="window.toggleTheme()" class="btn-theme">
+      <i data-lucide="sun"  id="theme-icon-light" style="display:none;width:1.25rem;height:1.25rem;"></i>
+      <i data-lucide="moon" id="theme-icon-dark"  style="width:1.25rem;height:1.25rem;"></i>
+    </button>
+    <div id="nav-user">
+      <div class="nav-user-info">
+        <div id="user-avatar">?</div>
+        <span id="user-display"></span>
+      </div>
+      <button onclick="window.handleLogout()" class="btn-logout">Salir</button>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <!-- Auth -->
+  <section id="view-auth" style="display:block">
+    <div class="card auth-card">
+      <div id="auth-login-form">
+        <h2 class="auth-title serif">Bienvenido</h2>
+        <p class="auth-sub">Accede para gestionar tus pedidos</p>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="auth-email" class="input-field" placeholder="tu@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pin (6 carac.)</label>
+          <input type="password" id="auth-password" class="input-field" maxlength="6" placeholder="······">
+        </div>
+        <div class="auth-actions">
+          <button onclick="window.handleAuth()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;">Entrar al Obrador</button>
+          <button onclick="window.showRegisterForm()" class="btn-register">Crear cuenta nueva</button>
+        </div>
+      </div>
+      <div id="auth-register-form" class="hidden">
+        <div class="register-header">
+          <button onclick="window.showLoginForm()" class="btn-back">
+            <i data-lucide="arrow-left" style="width:1.25rem;height:1.25rem;color:var(--b700);"></i>
+          </button>
+          <h3 class="serif" style="font-size:1.25rem;font-weight:700;">Nueva cuenta</h3>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nombre</label>
+          <input type="text" id="auth-name" class="input-field" placeholder="Tu nombre">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="auth-email-reg" class="input-field" placeholder="tu@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Pin (6 carac.)</label>
+          <input type="password" id="auth-password-reg" class="input-field" maxlength="6" placeholder="······">
+        </div>
+        <button onclick="window.handleRegister()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;margin-top:1rem;">Registrarme</button>
+      </div>
+      <p id="auth-error" class="hidden" style="color:#ef4444;font-size:.875rem;text-align:center;font-weight:700;margin-top:1.5rem;"></p>
+    </div>
+  </section>
+
+  <!-- Admin -->
+  <section id="view-admin" style="display:none">
+    <div class="stats-grid">
+      <div class="card stat-card" style="border-bottom:4px solid #4d7c0f;">
+        <div class="stat-label">Caja Total</div>
+        <p id="admin-total-revenue" class="stat-value stat-green">0,00€</p>
+      </div>
+      <div class="card stat-card" style="border-bottom:4px solid #ca8a04;">
+        <div class="stat-label">💵 Metálico</div>
+        <p id="admin-total-metalico" class="stat-value stat-yellow">0,00€</p>
+      </div>
+      <div class="card stat-card" style="border-bottom:4px solid #818cf8;">
+        <div class="stat-label">📱 Bizum</div>
+        <p id="admin-total-bizum" class="stat-value stat-indigo">0,00€</p>
+      </div>
+      <div class="card stat-card" style="border-bottom:4px solid #f59e0b;">
+        <div class="stat-label">Pendiente</div>
+        <p id="admin-total-debt" class="stat-value stat-amber">0,00€</p>
+      </div>
+    </div>
+
+    <div class="admin-top" style="margin-bottom:2.5rem;">
+      <button onclick="window.openNewBatchModal()" class="btn-primary" style="padding:1rem 2rem;font-size:1.125rem;box-shadow:0 20px 25px -5px rgba(111,68,34,.3);">
+        <i data-lucide="plus-circle" style="width:1.5rem;height:1.5rem;"></i> Nuevo Horneo
+      </button>
+    </div>
+
+    <div>
+      <div class="section-title">
+        <i data-lucide="flame"></i> Horneos en curso
+      </div>
+      <div class="batches-grid" id="admin-batches-list"></div>
+    </div>
+
+    <div class="card res-wrap" style="margin-top:2.5rem;">
+      <div class="res-header">
+        <h3><i data-lucide="clipboard-list"></i> Hoja de Pedidos Activos</h3>
+        <button onclick="window.generatePrintablePDF()" class="btn-pdf">
+          <i data-lucide="printer" style="width:1rem;height:1rem;"></i> PDF
+        </button>
+      </div>
+      <div class="table-scroll">
+        <table class="res-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Pedido (Entr.)</th>
+              <th>Importe / Pago</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th style="text-align:right;">Gestión</th>
+            </tr>
+          </thead>
+          <tbody id="admin-reservations-list"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:2.5rem;">
+      <div class="hist-title">
+        <i data-lucide="history"></i> Histórico
+      </div>
+      <div id="admin-historical-list" class="hist-list"></div>
+    </div>
+  </section>
+
+  <!-- Usuario -->
+  <section id="view-user" style="display:none;padding-top:1rem;">
+    <div id="user-available-batches" class="user-batches-grid"></div>
+    <div class="my-res-divider">
+      <h3>Mis Reservas</h3>
+      <div class="line"></div>
+    </div>
+    <div id="user-my-reservations" class="my-res-grid"></div>
+  </section>
+
+</main>
+
+<div id="print-container" style="position:absolute;left:-9999px;top:0;"></div>
+
+<!-- Modal: Nombre -->
+<div id="modal-ask-name">
+  <div class="ask-name-box">
+    <h3>¿Cómo te llamas?</h3>
+    <input type="text" id="ask-name-input" class="input-field"
+      style="font-size:1.25rem;text-align:center;font-weight:700;margin-bottom:1.5rem;"
+      placeholder="Tu nombre">
+    <button onclick="window.saveAskedName()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;">Guardar</button>
+  </div>
+</div>
+
+<!-- Modal: Nuevo Horneo -->
+<div id="modal-new-batch" class="modal-overlay">
+  <div class="modal-box">
+    <div id="new-batch-step-1" class="space-y-6">
+      <h3 class="serif" style="font-size:1.875rem;font-weight:700;">Nuevo Horneo</h3>
+      <div class="space-y-4">
+        <input type="date" id="new-batch-date" class="input-field">
+        <div class="grid-2">
+          <input type="number" id="new-batch-qty"   class="input-field" placeholder="Stock" value="30">
+          <input type="number" id="new-batch-price" class="input-field" placeholder="Precio" step="0.05" value="1.50">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="window.toggleModal('modal-new-batch',false)" class="btn-ghost">Cerrar</button>
+        <button onclick="window.goToBatchReview()" class="btn-primary">Siguiente</button>
+      </div>
+    </div>
+    <div id="new-batch-step-2" class="hidden" style="text-align:center;">
+      <h3 class="serif" style="font-size:1.5rem;font-weight:700;margin-bottom:1.5rem;">Confirmar</h3>
+      <div class="batch-review-box" style="margin-bottom:1.5rem;">
+        <p id="review-date-text"  style="font-weight:700;"></p>
+        <p id="review-qty-text"   style="font-size:.875rem;"></p>
+        <p id="review-price-text" style="font-size:1.25rem;font-weight:700;color:var(--b700);"></p>
+      </div>
+      <div class="modal-footer">
+        <button onclick="window.backToBatchEdit()" style="flex:1;padding:.75rem;border:1px solid var(--b200);border-radius:1.75rem;font-weight:700;">Editar</button>
+        <button onclick="window.createBatch()" class="btn-green" style="flex:1;">Publicar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Entrega + Cobro -->
+<div id="modal-partial-delivery" class="modal-overlay">
+  <div class="modal-box sm">
+    <h3 class="modal-title">Entrega</h3>
+    <p id="partial-info" class="modal-sub"></p>
+    <div class="space-y-4">
+      <input type="number" id="partial-qty" class="input-field"
+        style="font-size:1.5rem;text-align:center;font-weight:700;" min="1">
+      <div class="pay-check-box">
+        <label class="pay-check-label">
+          ¿Cobrar ahora?
+          <input type="checkbox" id="partial-pay-check">
+        </label>
+        <div id="partial-pay-method-box" class="hidden pay-method-box">
+          <div class="grid-2-sm">
+            <button id="btn-pay-metalico" onclick="window.selectPayMethod('metalico')">💵 Metálico</button>
+            <button id="btn-pay-bizum"    onclick="window.selectPayMethod('bizum')">📱 Bizum</button>
+          </div>
+        </div>
+        <div id="partial-pay-amount" class="hidden pay-amount-box">
+          <p id="partial-pay-total" class="pay-total">0,00€</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="window.toggleModal('modal-partial-delivery',false)" class="btn-ghost">Cerrar</button>
+      <button id="btn-confirm-partial" class="btn-green">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Reservar -->
+<div id="modal-reserve" class="modal-overlay">
+  <div class="modal-box sm">
+    <h3 class="modal-title">Tu Reserva</h3>
+    <p id="reserve-info" class="modal-sub"></p>
+    <div class="space-y-4">
+      <input type="number" id="reserve-qty" class="input-field"
+        style="font-size:1.875rem;text-align:center;font-weight:700;"
+        min="1" value="1" oninput="window.updateReserveTotal()">
+      <div class="reserve-total-box">
+        <p class="reserve-total-label">Total Estimado</p>
+        <p id="reserve-total-price" class="reserve-total-price">0,00€</p>
+      </div>
+      <div class="grid-2-sm">
+        <button id="reserve-btn-metalico" onclick="window.selectReserveMethod('metalico')" class="reserve-method-btn">💵 Metálico</button>
+        <button id="reserve-btn-bizum"    onclick="window.selectReserveMethod('bizum')" class="reserve-method-btn">📱 Bizum</button>
+      </div>
+    </div>
+    <button id="btn-confirm-reserve" class="btn-primary full" style="margin-top:1.5rem;padding:1rem;">Confirmar Pedido</button>
+    <button onclick="window.toggleModal('modal-reserve',false)" style="width:100%;padding:.75rem;font-weight:700;opacity:.4;font-size:.875rem;margin-top:.5rem;">Volver</button>
+  </div>
+</div>
+
+<!-- Modal: Cancelar Reserva -->
+<div id="modal-cancel-reservation" class="modal-overlay">
+  <div class="modal-box sm">
+    <div class="cancel-header">
+      <div class="cancel-icon">
+        <i data-lucide="x-circle" style="width:1.25rem;height:1.25rem;"></i>
+      </div>
+      <div>
+        <h3 style="font-size:1.25rem;font-weight:700;">Cancelar pedido</h3>
+        <p id="cancel-res-info" style="font-size:.75rem;opacity:.5;font-weight:700;"></p>
+      </div>
+    </div>
+    <div class="space-y-4">
+      <div class="cancel-inner space-y-4">
+        <div>
+          <label class="form-label">Unidades a cancelar</label>
+          <input type="number" id="cancel-qty" class="input-field"
+            style="font-size:1.5rem;text-align:center;font-weight:700;" min="1">
+        </div>
+        <div id="cancel-type-btns" class="hidden cancel-type-grid">
+          <button id="cancel-btn-partial" onclick="window.setCancelType('partial')" class="cancel-type-btn">
+            <span style="font-size:1.25rem;">✂️</span><span>Parcial</span>
+          </button>
+          <button id="cancel-btn-full" onclick="window.setCancelType('full')" class="cancel-type-btn">
+            <span style="font-size:1.25rem;">🗑️</span><span>Completo</span>
+          </button>
+        </div>
+      </div>
+      <div id="cancel-summary" class="hidden"></div>
+    </div>
+    <div class="modal-footer">
+      <button onclick="window.toggleModal('modal-cancel-reservation',false)" class="btn-ghost">Cerrar</button>
+      <button id="btn-confirm-cancel" class="btn-red">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="msg-box">
+  <div id="msg-content" class="success"></div>
+</div>
+
+<script type="module">
+
+const SUPABASE_URL      = 'https://uoravflfvbrgjzupcstg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvcmF2ZmxmdmJyZ2p6dXBjc3RnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NzMyMDAsImV4cCI6MjA4ODE0OTIwMH0.daQCTpoAk6FlpuHLxpEACOmHlOdkOMeB7WHA2evOP0Q';
+const supabase    = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const ADMIN_EMAIL = 'azud15m@gmail.com';
+
+let currentUser = null, currentProfile = null, isAdmin = false, activePrice = 0;
+let reservationsMap = {}, profilesMap = {}, currentReservationsForPrint = [];
+let selectedPayMethod = null, selectedReserveMethod = 'pendiente';
+const emailPrefix = e => e?.split('@')[0] || '';
+
+window.toggleTheme = () => {
+  const d = document.documentElement.classList.toggle('dark');
+  document.getElementById('theme-icon-light').style.display = d ? 'inline-flex' : 'none';
+  document.getElementById('theme-icon-dark').style.display  = d ? 'none' : 'inline-flex';
+};
+window.toggleModal = (id, show) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (show) { el.classList.add('open'); el.style.display = 'flex'; }
+  else      { el.classList.remove('open'); el.style.display = 'none'; }
+};
+function showMessage(text, type = 'success') {
+  const box = document.getElementById('msg-box');
+  const cnt = document.getElementById('msg-content');
+  if (!box || !cnt) return;
+  cnt.className = type === 'success' ? 'success' : 'error';
+  cnt.innerHTML = `<i data-lucide="${type === 'success' ? 'info' : 'alert-triangle'}" style="width:1rem;height:1rem;flex-shrink:0"></i> ${text}`;
+  box.classList.add('show'); box.style.display = 'block';
+  lucide.createIcons();
+  setTimeout(() => { box.classList.remove('show'); box.style.display = 'none'; }, 3500);
+}
+function formatDate(d) {
+  return new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'short' });
+}
+function formatMonth(dateStr) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { month:'long', year:'numeric' });
+}
+function getMonth(d) { return d.slice(0, 7); }
+function getInitials(name) {
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0,2) || '?';
+}
+function updateNavUser(name) {
+  document.getElementById('user-display').textContent = name;
+  document.getElementById('user-avatar').textContent  = getInitials(name);
+}
+function getDisplayName(userId, userEmail) { return profilesMap[userId] || emailPrefix(userEmail); }
+
+function methodBadges(r) {
+  const metAmt = (r.paid_metalico || 0) * r.price;
+  const bizAmt = (r.paid_bizum    || 0) * r.price;
+  let html = '';
+  if (metAmt > 0) html += `<span class="badge badge-metalico">💵 ${metAmt.toFixed(2)}€</span>`;
+  if (bizAmt > 0) html += `<span class="badge badge-bizum" style="margin-left:.15rem">📱 ${bizAmt.toFixed(2)}€</span>`;
+  if (!html && r.payment_method && r.payment_method !== 'pendiente') {
+    html = r.payment_method === 'bizum'
+      ? `<span class="badge badge-bizum">📱 Bizum</span>`
+      : `<span class="badge badge-metalico">💵 Metálico</span>`;
+  }
+  return html || `<span class="badge badge-pendiente">Pdte.</span>`;
+}
+
+function askForName() {
+  const modal = document.getElementById('modal-ask-name');
+  const input = document.getElementById('ask-name-input');
+  if (input) { input.value = ''; input.style.borderColor = ''; }
+  modal.classList.add('open');
+  modal.style.cssText = 'display:flex!important;position:fixed;inset:0;z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(8px);background:rgba(74,47,27,.7);';
+  setTimeout(() => { input?.focus(); lucide.createIcons(); }, 600);
+}
+function closeAskNameModal() {
+  const m = document.getElementById('modal-ask-name');
+  m.classList.remove('open'); m.style.cssText = 'display:none!important;';
+}
+function isPlaceholderName(name, email) {
+  if (!name || !email) return true;
+  return name.trim().toLowerCase() === emailPrefix(email).toLowerCase();
+}
+window.saveAskedName = async () => {
+  const input = document.getElementById('ask-name-input');
+  const name  = input.value.trim();
+  if (!name) { input.style.borderColor='#ef4444'; input.placeholder='Por favor escribe tu nombre'; input.focus(); return; }
+  closeAskNameModal();
+  const { error } = await supabase.from('profiles').upsert({ id: currentUser.id, display_name: name });
+  if (!error) { currentProfile = name; updateNavUser(name); isAdmin ? fetchAdminData() : fetchUserData(); }
+  else { showMessage('Error: ' + error.message, 'error'); askForName(); }
+};
+
+window.showRegisterForm = () => {
+  document.getElementById('auth-login-form').classList.add('hidden');
+  document.getElementById('auth-register-form').classList.remove('hidden');
+  lucide.createIcons();
+};
+window.showLoginForm = () => {
+  document.getElementById('auth-register-form').classList.add('hidden');
+  document.getElementById('auth-login-form').classList.remove('hidden');
+};
+window.handleAuth = async () => {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-password').value;
+  const err   = document.getElementById('auth-error');
+  err.classList.add('hidden');
+  try {
+    const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+  } catch(e) { err.textContent = e.message; err.classList.remove('hidden'); }
+};
+window.handleRegister = async () => {
+  const name  = document.getElementById('auth-name').value.trim();
+  const email = document.getElementById('auth-email-reg').value.trim();
+  const pass  = document.getElementById('auth-password-reg').value;
+  const err   = document.getElementById('auth-error');
+  err.classList.add('hidden');
+  if (!name || !email || pass?.length < 6) { err.textContent='Revisa los campos.'; err.classList.remove('hidden'); return; }
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password: pass });
+    if (error) throw error;
+    localStorage.setItem('pending_display_name', name);
+    if (data?.user?.id) { await supabase.from('profiles').upsert({ id: data.user.id, display_name: name }); }
+    showMessage(`¡Bienvenido/a, ${name}!`);
+    window.showLoginForm();
+  } catch(e) { err.textContent = e.message; err.classList.remove('hidden'); }
+};
+window.handleLogout = () => supabase.auth.signOut();
+
+async function loadProfile(userId) {
+  const { data } = await supabase.from('profiles').select('display_name').eq('id', userId).single();
+  return data?.display_name || null;
+}
+
+async function init() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    await updateUserState(session?.user || null);
+    supabase.auth.onAuthStateChange(async (_e, s) => await updateUserState(s?.user || null));
+  } catch(e) { console.error(e); }
+  finally { document.getElementById('loading').classList.add('hidden'); }
+}
+
+async function updateUserState(user) {
+  currentUser = user;
+  isAdmin = user?.email === ADMIN_EMAIL;
+  const navUser = document.getElementById('nav-user');
+  navUser.classList.toggle('show', !!user);
+  navUser.style.display = user ? 'flex' : 'none';
+  document.getElementById('view-auth').style.display  = user   ? 'none'  : 'block';
+  document.getElementById('view-admin').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('view-user').style.display  = (user && !isAdmin) ? 'block' : 'none';
+  if (user) {
+    const pendingName = localStorage.getItem('pending_display_name');
+    if (pendingName) {
+      localStorage.removeItem('pending_display_name');
+      await supabase.from('profiles').upsert({ id: user.id, display_name: pendingName });
+      currentProfile = pendingName; updateNavUser(pendingName);
+    } else {
+      const displayName = await loadProfile(user.id);
+      currentProfile = displayName;
+      if (!isAdmin && isPlaceholderName(displayName, user.email)) {
+        updateNavUser(emailPrefix(user.email)); askForName();
+      } else { updateNavUser(displayName || emailPrefix(user.email)); }
+    }
+    isAdmin ? fetchAdminData() : fetchUserData();
+    subscribeToChanges();
+  }
+  lucide.createIcons();
+}
+
+async function fetchAdminData() {
+  const { data: batches }      = await supabase.from('batches').select('*').order('date', { ascending: false });
+  const { data: reservations } = await supabase.from('reservations').select('*').neq('status','cancelado').order('created_at', { ascending: false });
+  const userIds = [...new Set((reservations || []).map(r => r.user_id))];
+  if (userIds.length) {
+    const { data: profiles } = await supabase.from('profiles').select('id,display_name').in('id', userIds);
+    profilesMap = {}; (profiles || []).forEach(p => { profilesMap[p.id] = p.display_name; });
+  }
+  const resWithPrice = (reservations || []).map(r => {
+    const batch = (batches || []).find(b => b.id === r.batch_id);
+    return { ...r, price: batch?.price ?? 0, batch_status: batch?.status ?? 'active' };
+  });
+  reservationsMap = {}; resWithPrice.forEach(r => { reservationsMap[r.id] = r; });
+  currentReservationsForPrint = resWithPrice.filter(r => r.batch_status === 'active');
+  renderAdminDashboard(batches || [], resWithPrice);
+}
+
+async function fetchUserData() {
+  const { data: activeBatches } = await supabase.from('batches').select('*').eq('status','active');
+  const { data: myRes }         = await supabase.from('reservations').select('*').eq('user_id', currentUser.id).neq('status','cancelado').order('created_at', { ascending: false });
+  const ids = new Set((activeBatches || []).map(b => b.id));
+  const myResWithPrice = (myRes || []).filter(r => ids.has(r.batch_id)).map(r => {
+    const batch = (activeBatches || []).find(b => b.id === r.batch_id);
+    return { ...r, price: batch?.price ?? 0 };
+  });
+  renderUserAvailable((activeBatches || []).filter(b => b.remaining > 0));
+  renderUserMyReservations(myResWithPrice);
+}
+
+function subscribeToChanges() {
+  supabase.getChannels().forEach(ch => supabase.removeChannel(ch));
+  supabase.channel('bread-db')
+    .on('postgres_changes', { event:'*', schema:'public', table:'batches' },      () => isAdmin ? fetchAdminData() : fetchUserData())
+    .on('postgres_changes', { event:'*', schema:'public', table:'reservations' }, () => isAdmin ? fetchAdminData() : fetchUserData())
+    .subscribe();
+}
+
+window.openNewBatchModal = () => {
+  document.getElementById('new-batch-step-1').classList.remove('hidden');
+  document.getElementById('new-batch-step-2').classList.add('hidden');
+  window.toggleModal('modal-new-batch', true);
+};
+window.goToBatchReview = () => {
+  const date  = document.getElementById('new-batch-date').value;
+  const qty   = document.getElementById('new-batch-qty').value;
+  const price = document.getElementById('new-batch-price').value;
+  if (!date || qty < 1) return;
+  document.getElementById('review-date-text').textContent  = formatDate(date);
+  document.getElementById('review-qty-text').textContent   = `${qty} unidades`;
+  document.getElementById('review-price-text').textContent = `${parseFloat(price).toFixed(2)}€/ud`;
+  document.getElementById('new-batch-step-1').classList.add('hidden');
+  document.getElementById('new-batch-step-2').classList.remove('hidden');
+};
+window.backToBatchEdit = () => {
+  document.getElementById('new-batch-step-1').classList.remove('hidden');
+  document.getElementById('new-batch-step-2').classList.add('hidden');
+};
+window.createBatch = async () => {
+  const date  = document.getElementById('new-batch-date').value;
+  const qty   = parseInt(document.getElementById('new-batch-qty').value);
+  const price = parseFloat(document.getElementById('new-batch-price').value);
+  const { error } = await supabase.from('batches').insert([{ date, total: qty, remaining: qty, status:'active', price }]);
+  if (!error) window.toggleModal('modal-new-batch', false);
+};
+window.archiveBatch = async (id) => {
+  if (!confirm('¿Cerrar este horneo?')) return;
+  const { error } = await supabase.from('batches').update({ status:'inactive' }).eq('id', id);
+  if (error) return showMessage('Error: ' + error.message, 'error');
+  showMessage('✓ Horneo cerrado'); fetchAdminData();
+};
+window.deleteBatch = async (id) => {
+  if (!confirm('¿Borrar permanentemente este horneo?')) return;
+  const { error } = await supabase.from('batches').delete().eq('id', id);
+  if (error) return showMessage('Error: ' + error.message, 'error');
+  showMessage('✓ Horneo eliminado'); fetchAdminData();
+};
+window.sendBatchNotification = async (batchId, batchDate, batchPrice, batchRemaining) => {
+  if (!confirm(`¿Enviar aviso?\nFecha: ${formatDate(batchDate)}\n${batchRemaining} uds.`)) return;
+  showMessage('Enviando aviso...');
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || SUPABASE_ANON_KEY;
+    const resp  = await fetch('https://uoravflfvbrgjzupcstg.supabase.co/functions/v1/notify-new-batch', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ batch: { id: batchId, date: batchDate, price: batchPrice, remaining: batchRemaining } }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error);
+    showMessage(`✓ Aviso enviado a ${data.sent} clientes`);
+  } catch(e) { showMessage('Error: ' + e.message, 'error'); }
+};
+
+window.openMarkAsPaidModal = (resId) => {
+  const res = reservationsMap[resId]; if (!res) return;
+  selectedPayMethod = null;
+  document.getElementById('partial-info').textContent = `${getDisplayName(res.user_id, res.user_email)} · Cobrar total`;
+  document.getElementById('partial-qty').value    = res.quantity - (res.paid_quantity || 0);
+  document.getElementById('partial-qty').disabled = true;
+  document.getElementById('partial-pay-check').checked  = true;
+  document.getElementById('partial-pay-check').disabled = true;
+  document.getElementById('partial-pay-method-box').classList.remove('hidden');
+  document.getElementById('partial-pay-amount').classList.remove('hidden');
+  document.getElementById('partial-pay-total').textContent = ((res.quantity - (res.paid_quantity || 0)) * res.price).toFixed(2) + '€';
+  document.getElementById('btn-confirm-partial').onclick = () => {
+    const method = selectedPayMethod;
+    if (!method) return showMessage('Elige método', 'error');
+    confirmPartialDelivery(res, res.quantity - (res.paid_quantity || 0), true, method);
+  };
+  window.toggleModal('modal-partial-delivery', true);
+};
+
+window.openPartialDeliveryModal = (resId) => {
+  const res = reservationsMap[resId]; if (!res) return;
+  selectedPayMethod = null;
+  const pendDel = res.quantity - (res.delivered_quantity || 0);
+  document.getElementById('partial-info').textContent    = `${getDisplayName(res.user_id, res.user_email)} · Entregar parcial`;
+  document.getElementById('partial-qty').value           = pendDel;
+  document.getElementById('partial-qty').max             = pendDel;
+  document.getElementById('partial-qty').disabled        = false;
+  document.getElementById('partial-pay-check').checked   = false;
+  document.getElementById('partial-pay-check').disabled  = false;
+  document.getElementById('partial-pay-method-box').classList.add('hidden');
+  document.getElementById('partial-pay-amount').classList.add('hidden');
+  document.getElementById('partial-pay-check').onchange = (e) => {
+    document.getElementById('partial-pay-method-box').classList.toggle('hidden', !e.target.checked);
+    document.getElementById('partial-pay-total').textContent = (document.getElementById('partial-qty').value * res.price).toFixed(2) + '€';
+  };
+  document.getElementById('btn-confirm-partial').onclick = () => {
+    const method = selectedPayMethod;
+    const qty    = parseInt(document.getElementById('partial-qty').value);
+    const doPay  = document.getElementById('partial-pay-check').checked;
+    if (doPay && !method) return showMessage('Elige método', 'error');
+    confirmPartialDelivery(res, qty, doPay, method);
+  };
+  window.toggleModal('modal-partial-delivery', true);
+};
+
+async function confirmPartialDelivery(res, amount, doPay, method) {
+  const newDel  = (res.delivered_quantity || 0) + amount;
+  const newPaid = doPay ? Math.min((res.paid_quantity || 0) + amount, res.quantity) : (res.paid_quantity || 0);
+  const update  = {
+    delivered_quantity: newDel,
+    paid_quantity: newPaid,
+    is_paid: Boolean(newPaid >= res.quantity),
+    status:  newDel >= res.quantity ? 'entregado' : 'reservado',
+    payment_method: doPay ? method : res.payment_method,
+    paid_metalico: (res.paid_metalico || 0) + (doPay && method === 'metalico' ? amount : 0),
+    paid_bizum:    (res.paid_bizum    || 0) + (doPay && method === 'bizum'    ? amount : 0),
+  };
+  const { error } = await supabase.from('reservations').update(update).eq('id', res.id);
+  if (error) return showMessage('Error: ' + error.message, 'error');
+  window.toggleModal('modal-partial-delivery', false);
+  showMessage('✓ Registro actualizado');
+  fetchAdminData();
+}
+
+window.selectPayMethod = (m) => {
+  selectedPayMethod = m;
+  document.getElementById('btn-pay-metalico').style.borderColor = m==='metalico' ? '#945D31' : '';
+  document.getElementById('btn-pay-bizum').style.borderColor    = m==='bizum'    ? '#3b82f6' : '';
+  document.getElementById('partial-pay-amount').classList.remove('hidden');
+};
+
+window.openReserveModal = (batchId, date, rem, price) => {
+  activePrice = price; selectedReserveMethod = 'pendiente';
+  document.getElementById('reserve-info').textContent = `Recogida ${formatDate(date)}`;
+  document.getElementById('reserve-qty').max   = rem;
+  document.getElementById('reserve-qty').value = 1;
+  window.updateReserveTotal();
+  document.getElementById('btn-confirm-reserve').onclick = () => confirmReservation(batchId, date, rem);
+  window.toggleModal('modal-reserve', true);
+};
+window.updateReserveTotal = () => {
+  document.getElementById('reserve-total-price').textContent = (document.getElementById('reserve-qty').value * activePrice).toFixed(2) + '€';
+};
+window.selectReserveMethod = (m) => {
+  selectedReserveMethod = m;
+  document.getElementById('reserve-btn-metalico').style.borderColor = m==='metalico' ? 'white' : '';
+  document.getElementById('reserve-btn-bizum').style.borderColor    = m==='bizum'    ? 'white' : '';
+};
+async function confirmReservation(bId, date, rem) {
+  const qty = parseInt(document.getElementById('reserve-qty').value);
+  const { error } = await supabase.from('reservations').insert([{
+    batch_id: bId, batch_date: date, user_id: currentUser.id,
+    user_email: currentUser.email, quantity: qty, payment_method: selectedReserveMethod
+  }]);
+  if (!error) {
+    await supabase.from('batches').update({ remaining: rem - qty }).eq('id', bId);
+    window.toggleModal('modal-reserve', false);
+    showMessage('✓ Pedido confirmado');
+  }
+}
+
+let cancelTarget = null, cancelType = 'full';
+
+window.openCancelModal = async (resId, isAdminAction = false) => {
+  let reservation = reservationsMap[resId];
+  if (!reservation) {
+    const { data } = await supabase.from('reservations').select('*').eq('id', resId).single();
+    reservation = data;
+  }
+  if (!reservation) return showMessage('Reserva no encontrada', 'error');
+  if (reservation.status === 'entregado') return showMessage('No se puede cancelar un pedido ya entregado', 'error');
+  cancelTarget = { ...reservation, isAdminAction };
+  cancelType   = 'full';
+  const nombre    = isAdminAction ? getDisplayName(reservation.user_id, reservation.user_email) : (currentProfile || emailPrefix(currentUser.email));
+  const maxCancel = reservation.quantity - (reservation.delivered_quantity || 0);
+  document.getElementById('cancel-res-info').textContent = `${nombre} · ${reservation.quantity} ud.`;
+  const qtyInput    = document.getElementById('cancel-qty');
+  qtyInput.max      = maxCancel;
+  qtyInput.min      = 1;
+  qtyInput.value    = maxCancel;
+  const typeBox = document.getElementById('cancel-type-btns');
+  typeBox.classList.toggle('hidden', maxCancel <= 1);
+  if (maxCancel <= 1) { qtyInput.disabled = true; cancelType = 'full'; }
+  else { qtyInput.disabled = false; }
+  document.getElementById('cancel-btn-full').className    = 'cancel-type-btn active-full';
+  document.getElementById('cancel-btn-partial').className = 'cancel-type-btn';
+  qtyInput.oninput = () => updateCancelSummary(maxCancel, reservation);
+  updateCancelSummary(maxCancel, reservation);
+  document.getElementById('btn-confirm-cancel').onclick = () => confirmCancel(reservation, maxCancel);
+  window.toggleModal('modal-cancel-reservation', true);
+};
+
+window.setCancelType = (type) => {
+  cancelType = type;
+  const qtyInput  = document.getElementById('cancel-qty');
+  const maxCancel = parseInt(qtyInput.max);
+  if (type === 'full') {
+    qtyInput.value = maxCancel; qtyInput.disabled = true;
+    document.getElementById('cancel-btn-full').className    = 'cancel-type-btn active-full';
+    document.getElementById('cancel-btn-partial').className = 'cancel-type-btn';
+  } else {
+    qtyInput.value = 1; qtyInput.disabled = false; qtyInput.focus();
+    document.getElementById('cancel-btn-partial').className = 'cancel-type-btn active-partial';
+    document.getElementById('cancel-btn-full').className    = 'cancel-type-btn';
+  }
+  updateCancelSummary(maxCancel, cancelTarget);
+};
+
+function updateCancelSummary(maxCancel, reservation) {
+  const qty     = Math.min(parseInt(document.getElementById('cancel-qty').value) || 1, maxCancel);
+  const isFull  = qty >= maxCancel;
+  const importe = qty * (reservation.price || 0);
+  const summary = document.getElementById('cancel-summary');
+  summary.classList.remove('hidden');
+  summary.innerHTML = isFull
+    ? `🗑️ Se cancelará el pedido completo<br><span style="font-size:.75rem;font-weight:400;opacity:.7">${qty} ud. devueltas al stock · ${importe.toFixed(2)}€</span>`
+    : `✂️ Cancelación parcial: <strong>${qty}</strong> ud.<br><span style="font-size:.75rem;font-weight:400;opacity:.7">${qty} ud. devueltas al stock · ${importe.toFixed(2)}€</span>`;
+}
+
+async function confirmCancel(reservation, maxCancel) {
+  const qty    = Math.min(parseInt(document.getElementById('cancel-qty').value) || 1, maxCancel);
+  const isFull = qty >= maxCancel;
+  const nombre = cancelTarget.isAdminAction
+    ? getDisplayName(reservation.user_id, reservation.user_email)
+    : (currentProfile || emailPrefix(currentUser.email));
+  let updateData;
+  if (isFull) {
+    updateData = { status: 'cancelado' };
+  } else {
+    const newQty  = reservation.quantity - qty;
+    const newPaid = Math.min(reservation.paid_quantity || 0, newQty);
+    const ratio   = newQty / reservation.quantity;
+    updateData = {
+      quantity:      newQty,
+      paid_quantity: newPaid,
+      paid_metalico: Math.round((reservation.paid_metalico || 0) * ratio * 100) / 100,
+      paid_bizum:    Math.round((reservation.paid_bizum    || 0) * ratio * 100) / 100,
+      is_paid:       newPaid >= newQty,
+      status:        'reservado',
+    };
+  }
+  const { error: errRes } = await supabase.from('reservations').update(updateData).eq('id', reservation.id);
+  if (errRes) return showMessage('Error al cancelar: ' + errRes.message, 'error');
+  const { data: batch } = await supabase.from('batches').select('remaining').eq('id', reservation.batch_id).single();
+  if (batch) { await supabase.from('batches').update({ remaining: batch.remaining + qty }).eq('id', reservation.batch_id); }
+  window.toggleModal('modal-cancel-reservation', false);
+  showMessage(isFull
+    ? `✓ Pedido de ${nombre} cancelado — ${qty} ud. devuelta${qty>1?'s':''} al stock`
+    : `✓ Cancelación parcial: ${qty} ud. de ${nombre} devuelta${qty>1?'s':''} al stock`
+  );
+  isAdmin ? fetchAdminData() : fetchUserData();
+}
+
+// ── Render Admin ──
+function renderAdminDashboard(batches, reservations) {
+  const activeBatches   = batches.filter(b => b.status === 'active');
+  const inactiveBatches = batches.filter(b => b.status === 'inactive');
+
+  let totalMet = 0, totalBiz = 0, totalDeuda = 0;
+  reservations.filter(r => r.batch_status === 'active').forEach(r => {
+    totalMet   += (r.paid_metalico || 0) * r.price;
+    totalBiz   += (r.paid_bizum    || 0) * r.price;
+    totalDeuda += (r.quantity - (r.paid_quantity || 0)) * r.price;
+  });
+  const totalCobrado = totalMet + totalBiz;
+  document.getElementById('admin-total-revenue').textContent  = totalCobrado.toFixed(2) + '€';
+  document.getElementById('admin-total-metalico').textContent = totalMet.toFixed(2) + '€';
+  document.getElementById('admin-total-bizum').textContent    = totalBiz.toFixed(2) + '€';
+  document.getElementById('admin-total-debt').textContent     = totalDeuda.toFixed(2) + '€';
+
+  // Horneos activos
 	document.getElementById('admin-batches-list').innerHTML = activeBatches.length
 	    ? activeBatches.map(b => `
 	      <div class="card batch-card">
