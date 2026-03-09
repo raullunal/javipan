@@ -971,11 +971,11 @@ function renderAdminDashboard(batches, reservations) {
     return '<div class="card" style="padding:1.5rem;box-shadow:0 4px 20px rgba(0,0,0,.08);">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">'
       + '<div>'
-      + '<h4 style="font-family:\'Instrument Serif\',serif;font-size:1.25rem;font-weight:700;text-transform:capitalize;">' + mLabel + '</h4>'
+      + '<h4 style="font-family:\'Special Elite\',serif;font-size:1.25rem;font-weight:700;text-transform:capitalize;">' + mLabel + '</h4>'
       + '<p style="font-size:.65rem;font-weight:900;opacity:.4;text-transform:uppercase;letter-spacing:.05em;">' + monthBatches.length + ' horneo' + (monthBatches.length !== 1 ? 's' : '') + '</p>'
       + '</div>'
       + '<div style="text-align:right;">'
-      + '<p style="font-family:\'Instrument Serif\',serif;font-size:1.25rem;font-weight:700;color:#15803d;">' + mTotalCobrado.toFixed(2) + '€</p>'
+      + '<p style="font-family:\'Special Elite\',serif;font-size:1.25rem;font-weight:700;color:#15803d;">' + mTotalCobrado.toFixed(2) + '€</p>'
       + '<p style="font-size:.6rem;font-weight:900;opacity:.4;text-transform:uppercase;">cobrado</p>'
       + '</div></div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1rem;">'
@@ -1030,7 +1030,7 @@ function renderUserMyReservations(items) {
       + '<div style="display:flex;gap:.25rem;flex-wrap:wrap;">' + methodBadges(r) + '</div>'
       + '<div style="display:flex;justify-content:space-between;align-items:center;">'
       + '<span class="my-res-status ' + statusClass + '">' + r.status + '</span>'
-      + '<p style="font-family:\'Instrument Serif\',serif;font-size:1.125rem;font-weight:700;color:var(--b800);">' + (r.quantity * r.price).toFixed(2) + '€</p>'
+      + '<p style="font-family:\'Special Elite\',serif;font-size:1.125rem;font-weight:700;color:var(--b800);">' + (r.quantity * r.price).toFixed(2) + '€</p>'
       + '</div>'
       + cancelBtn
       + '</div>';
