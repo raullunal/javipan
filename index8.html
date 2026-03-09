@@ -404,6 +404,7 @@ function closeAskNameModal() {
 }
 function isPlaceholderName(name, email) {
   if (!name || !email) return true;
+  if (name.trim().length < 2) return true;
   return name.trim().toLowerCase() === emailPrefix(email).toLowerCase();
 }
 window.saveAskedName = async () => {
@@ -443,9 +444,14 @@ window.handleRegister = async () => {
   err.classList.add('hidden');
   if (!name || !email || pass?.length < 6) { err.textContent='Revisa los campos.'; err.classList.remove('hidden'); return; }
   try {
-    const { data, error } = await supabase.auth.signUp({ email, password: pass });
-    if (error) throw error;
     localStorage.setItem('pending_display_name', name);
+    localStorage.setItem('pending_display_email', email);
+    const { data, error } = await supabase.auth.signUp({ email, password: pass });
+    if (error) {
+      localStorage.removeItem('pending_display_name');
+      localStorage.removeItem('pending_display_email');
+      throw error;
+    }
     if (data?.user?.id) { await supabase.from('profiles').upsert({ id: data.user.id, display_name: name }); }
     showMessage(`¡Bienvenido/a, ${name}!`);
     window.showLoginForm();
@@ -476,13 +482,32 @@ async function updateUserState(user) {
   document.getElementById('view-auth').style.display  = user   ? 'none'  : 'block';
   document.getElementById('view-admin').style.display = isAdmin ? 'block' : 'none';
   document.getElementById('view-user').style.display  = (user && !isAdmin) ? 'block' : 'none';
+  if (!user) {
+    currentProfile = null;
+    profilesMap = {};
+    reservationsMap = {};
+    currentReservationsForPrint = [];
+    document.getElementById('user-display').textContent = '';
+    document.getElementById('user-avatar').textContent  = '?';
+    document.getElementById('admin-batches-list').innerHTML      = '';
+    document.getElementById('admin-reservations-list').innerHTML = '';
+    document.getElementById('admin-historical-list').innerHTML   = '';
+    document.getElementById('user-available-batches').innerHTML  = '';
+    document.getElementById('user-my-reservations').innerHTML    = '';
+    return;
+  }
   if (user) {
-    const pendingName = localStorage.getItem('pending_display_name');
-    if (pendingName) {
+    const pendingName  = localStorage.getItem('pending_display_name');
+    const pendingEmail = localStorage.getItem('pending_display_email');
+    if (pendingName && pendingEmail === user.email) {
       localStorage.removeItem('pending_display_name');
-      await supabase.from('profiles').upsert({ id: user.id, display_name: pendingName });
+      localStorage.removeItem('pending_display_email');
       currentProfile = pendingName; updateNavUser(pendingName);
     } else {
+      if (pendingName) {
+        localStorage.removeItem('pending_display_name');
+        localStorage.removeItem('pending_display_email');
+      }
       const displayName = await loadProfile(user.id);
       currentProfile = displayName;
       if (!isAdmin && isPlaceholderName(displayName, user.email)) {
