@@ -37,12 +37,18 @@ h1,h2,h3,h4,.serif{font-family:'Special Elite',serif}
 /* ── Loading ───────────────────────────────── */
 #loading{
   position:fixed;inset:0;background:var(--bg);
-  display:flex;align-items:center;justify-content:center;z-index:100;
+  /* display:flex;align-items:center;justify-content:center;z-index:100; */
+  display: grid;place-items: start center; height: 100vh; z-index:100;
 }
-.loading-inner{
+/* .loading-inner{
   display:flex;flex-direction:column;align-items:center;
   justify-content:center;text-align:center;width:100%;
-}
+} */
+.loading-inner {
+  display: grid;
+  place-items: center;   /* centra horizontal y vertical */
+  text-align: center;
+  gap: 10px;             /* separación entre svg y texto */
 .loading-inner svg{
   width:10rem;height:10rem;color:var(--b700);
   display:block;margin:0 auto 1rem;
