@@ -49,6 +49,7 @@ h1,h2,h3,h4,.serif{font-family:'Special Elite',serif}
   place-items: center;   /* centra horizontal y vertical */
   text-align: center;
   gap: 10px;             /* separación entre svg y texto */
+}
 .loading-inner svg{
   width:10rem;height:10rem;color:var(--b700);
   display:block;margin:0 auto 1rem;
