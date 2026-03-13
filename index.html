@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>El Horno Artesano - Gestión Reservas y Entregas</title>
-<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2.49.1/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/lucide@0.477.0/dist/umd/lucide.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles3.css">
 </head>
 <body>
 
@@ -68,7 +68,7 @@
   <section id="view-auth" style="display:block">
     <div class="card auth-card">
       <div id="auth-login-form">
-        <h2 class="auth-title serif">¡Hola! ¿Quién eres?</h2>
+        <h2 class="auth-title serif">Bienvenido</h2>
         <p class="auth-sub">Accede para gestionar tus pedidos</p>
         <div class="form-group">
           <label class="form-label">Email</label>
@@ -80,6 +80,7 @@
         </div>
         <div class="auth-actions">
           <button onclick="window.handleAuth()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;">Entrar al Obrador</button>
+           <button onclick="window.showForgotForm()" class="btn-forgot">¿Olvidaste tu pin?</button>
           <button onclick="window.showRegisterForm()" class="btn-register">Crear cuenta nueva</button>
         </div>
       </div>
@@ -102,8 +103,45 @@
           <label class="form-label">Pin (6 carac.)</label>
           <input type="password" id="auth-password-reg" class="input-field" maxlength="6" placeholder="······">
         </div>
-        <button onclick="window.handleRegister()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;margin-top:1rem;">Registrarme</button>
+          <button onclick="window.handleRegister()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;margin-top:1rem;">Registrarme</button>
       </div>
+
+      <!-- Panel: Recuperar contraseña -->
+      <div id="auth-forgot-form" class="hidden">
+        <div class="register-header">
+          <button onclick="window.showLoginForm()" class="btn-back">
+            <i data-lucide="arrow-left" style="width:1.25rem;height:1.25rem;color:var(--b700);"></i>
+          </button>
+          <h3 class="serif" style="font-size:1.25rem;font-weight:700;">Recuperar acceso</h3>
+        </div>
+        <p class="auth-sub" style="text-align:left;">Te enviaremos un enlace para definir un nuevo pin.</p>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="auth-email-forgot" class="input-field" placeholder="tu@email.com">
+        </div>
+        <button onclick="window.handleForgotPassword()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;margin-top:.5rem;">Enviar enlace</button>
+        <div id="forgot-success" class="hidden forgot-success-box">
+          <i data-lucide="mail-check" style="width:2rem;height:2rem;color:var(--b700);margin-bottom:.5rem;"></i>
+          <p>Enlace enviado. Revisa tu email y haz clic para definir tu nuevo pin.</p>
+        </div>
+      </div>
+
+      <!-- Panel: Nuevo pin (desde enlace del email) -->
+      <div id="auth-reset-form" class="hidden">
+        <h2 class="auth-title serif">Nuevo pin</h2>
+        <p class="auth-sub">Elige un pin de 6 caracteres</p>
+        <div class="form-group">
+          <label class="form-label">Nuevo pin</label>
+          <input type="password" id="auth-new-password" class="input-field" maxlength="6" placeholder="······">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Repetir pin</label>
+          <input type="password" id="auth-new-password2" class="input-field" maxlength="6" placeholder="······">
+        </div>
+        <button onclick="window.handleResetPassword()" class="btn-primary full" style="padding:1rem;font-size:1.125rem;margin-top:.5rem;">Guardar nuevo pin</button>
+        <p id="reset-error" class="hidden" style="color:#ef4444;font-size:.875rem;text-align:center;font-weight:700;margin-top:1rem;"></p>
+      </div>
+
       <p id="auth-error" class="hidden" style="color:#ef4444;font-size:.875rem;text-align:center;font-weight:700;margin-top:1.5rem;"></p>
     </div>
   </section>
@@ -418,14 +456,20 @@ window.saveAskedName = async () => {
 };
 
 window.showRegisterForm = () => {
-  document.getElementById('auth-login-form').classList.add('hidden');
+  ['auth-login-form','auth-forgot-form','auth-reset-form'].forEach(id =>
+    document.getElementById(id).classList.add('hidden')
+  );
   document.getElementById('auth-register-form').classList.remove('hidden');
   lucide.createIcons();
 };
+
 window.showLoginForm = () => {
-  document.getElementById('auth-register-form').classList.add('hidden');
+  ['auth-register-form','auth-forgot-form','auth-reset-form'].forEach(id =>
+    document.getElementById(id).classList.add('hidden')
+  );
   document.getElementById('auth-login-form').classList.remove('hidden');
 };
+
 window.handleAuth = async () => {
   const email = document.getElementById('auth-email').value.trim();
   const pass  = document.getElementById('auth-password').value;
@@ -463,15 +507,97 @@ async function loadProfile(userId) {
   const { data } = await supabase.from('profiles').select('display_name').eq('id', userId).single();
   return data?.display_name || null;
 }
+// ── Recuperar contraseña ──────────────────────────────────
+window.showForgotForm = () => {
+  ['auth-login-form','auth-register-form','auth-reset-form'].forEach(id =>
+    document.getElementById(id).classList.add('hidden')
+  );
+  document.getElementById('forgot-success').classList.add('hidden');
+  document.getElementById('auth-email-forgot').disabled = false;
+  document.getElementById('auth-forgot-form').classList.remove('hidden');
+  lucide.createIcons();
+};
+
+window.handleForgotPassword = async () => {
+  const email = document.getElementById('auth-email-forgot').value.trim();
+  if (!email) return;
+  const redirectTo = window.location.href.split('?')[0].split('#')[0];
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) {
+    showMessage('Error: ' + error.message, 'error');
+  } else {
+    document.getElementById('forgot-success').classList.remove('hidden');
+    document.getElementById('auth-email-forgot').disabled = true;
+  }
+};
+
+window.handleResetPassword = async () => {
+  const pass1 = document.getElementById('auth-new-password').value;
+  const pass2 = document.getElementById('auth-new-password2').value;
+  const err   = document.getElementById('reset-error');
+  err.classList.add('hidden');
+  if (pass1.length < 6) { err.textContent = 'El pin debe tener 6 caracteres.'; err.classList.remove('hidden'); return; }
+  if (pass1 !== pass2)  { err.textContent = 'Los pines no coinciden.';          err.classList.remove('hidden'); return; }
+  const { error } = await supabase.auth.updateUser({ password: pass1 });
+  if (error) { err.textContent = error.message; err.classList.remove('hidden'); return; }
+  showMessage('✓ Pin actualizado. Ya puedes entrar.');
+  window.history.replaceState(null, '', window.location.pathname);
+  window.showLoginForm();
+};
 
 async function init() {
   try {
+    // ── Detectar enlace de recuperación ANTES de cualquier otra cosa ──
+    const hash = window.location.hash;
+    const isRecovery = hash.includes('type=recovery');
+
+    if (isRecovery) {
+      // Mostrar solo la vista auth con el panel de nuevo pin
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('view-auth').style.display  = 'block';
+      document.getElementById('view-admin').style.display = 'none';
+      document.getElementById('view-user').style.display  = 'none';
+      ['auth-login-form','auth-register-form','auth-forgot-form'].forEach(id =>
+        document.getElementById(id).classList.add('hidden')
+      );
+      document.getElementById('auth-reset-form').classList.remove('hidden');
+      lucide.createIcons();
+
+      // Dejar que Supabase procese el token del hash
+      supabase.auth.onAuthStateChange(async (event, s) => {
+        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+          // Mantener el panel de reset, no redirigir a la app
+          document.getElementById('view-auth').style.display  = 'block';
+          document.getElementById('view-admin').style.display = 'none';
+          document.getElementById('view-user').style.display  = 'none';
+        }
+      });
+      return; // No continuar con el flujo normal
+    }
+
+    // ── Flujo normal ──
     const { data: { session } } = await supabase.auth.getSession();
     await updateUserState(session?.user || null);
-    supabase.auth.onAuthStateChange(async (_e, s) => await updateUserState(s?.user || null));
+
+    supabase.auth.onAuthStateChange(async (event, s) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        document.getElementById('view-admin').style.display = 'none';
+        document.getElementById('view-user').style.display  = 'none';
+        document.getElementById('view-auth').style.display  = 'block';
+        ['auth-login-form','auth-register-form','auth-forgot-form'].forEach(id =>
+          document.getElementById(id).classList.add('hidden')
+        );
+        document.getElementById('auth-reset-form').classList.remove('hidden');
+        lucide.createIcons();
+        return;
+      }
+      await updateUserState(s?.user || null);
+    });
+
   } catch(e) { console.error(e); }
   finally { document.getElementById('loading').classList.add('hidden'); }
 }
+
 
 async function updateUserState(user) {
   currentUser = user;
