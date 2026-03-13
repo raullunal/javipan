@@ -547,8 +547,38 @@ window.handleResetPassword = async () => {
 
 async function init() {
   try {
+    // ── Detectar enlace de recuperación ANTES de cualquier otra cosa ──
+    const hash = window.location.hash;
+    const isRecovery = hash.includes('type=recovery');
+
+    if (isRecovery) {
+      // Mostrar solo la vista auth con el panel de nuevo pin
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('view-auth').style.display  = 'block';
+      document.getElementById('view-admin').style.display = 'none';
+      document.getElementById('view-user').style.display  = 'none';
+      ['auth-login-form','auth-register-form','auth-forgot-form'].forEach(id =>
+        document.getElementById(id).classList.add('hidden')
+      );
+      document.getElementById('auth-reset-form').classList.remove('hidden');
+      lucide.createIcons();
+
+      // Dejar que Supabase procese el token del hash
+      supabase.auth.onAuthStateChange(async (event, s) => {
+        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+          // Mantener el panel de reset, no redirigir a la app
+          document.getElementById('view-auth').style.display  = 'block';
+          document.getElementById('view-admin').style.display = 'none';
+          document.getElementById('view-user').style.display  = 'none';
+        }
+      });
+      return; // No continuar con el flujo normal
+    }
+
+    // ── Flujo normal ──
     const { data: { session } } = await supabase.auth.getSession();
     await updateUserState(session?.user || null);
+
     supabase.auth.onAuthStateChange(async (event, s) => {
       if (event === 'PASSWORD_RECOVERY') {
         document.getElementById('view-admin').style.display = 'none';
@@ -563,9 +593,11 @@ async function init() {
       }
       await updateUserState(s?.user || null);
     });
+
   } catch(e) { console.error(e); }
   finally { document.getElementById('loading').classList.add('hidden'); }
 }
+
 
 async function updateUserState(user) {
   currentUser = user;
