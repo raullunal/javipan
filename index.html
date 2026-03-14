@@ -541,6 +541,7 @@ window.handleResetPassword = async () => {
   const { error } = await supabase.auth.updateUser({ password: pass1 });
   if (error) { err.textContent = error.message; err.classList.remove('hidden'); return; }
   showMessage('✓ Pin actualizado. Ya puedes entrar.');
+  await supabase.auth.signOut();
   window.history.replaceState(null, '', window.location.pathname);
   window.showLoginForm();
 };
@@ -591,6 +592,8 @@ async function init() {
         lucide.createIcons();
         return;
       }
+      const resetForm = document.getElementById('auth-reset-form');
+      if (!resetForm.classList.contains('hidden')) return;
       await updateUserState(s?.user || null);
     });
 
