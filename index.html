@@ -548,58 +548,52 @@ window.handleResetPassword = async () => {
 
 async function init() {
   try {
-    // ── Detectar enlace de recuperación ANTES de cualquier otra cosa ──
     const hash = window.location.hash;
     const isRecovery = hash.includes('type=recovery');
 
     if (isRecovery) {
-      // Mostrar solo la vista auth con el panel de nuevo pin
       document.getElementById('loading').classList.add('hidden');
-      document.getElementById('view-auth').style.display  = 'block';
+      document.getElementById('view-auth').style.display = 'block';
       document.getElementById('view-admin').style.display = 'none';
-      document.getElementById('view-user').style.display  = 'none';
+      document.getElementById('view-user').style.display = 'none';
       ['auth-login-form','auth-register-form','auth-forgot-form'].forEach(id =>
-        document.getElementById(id).classList.add('hidden')
-      );
+        document.getElementById(id).classList.add('hidden'));
       document.getElementById('auth-reset-form').classList.remove('hidden');
       lucide.createIcons();
-
-      // Dejar que Supabase procese el token del hash
-      supabase.auth.onAuthStateChange(async (event, s) => {
-        if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
-          // Mantener el panel de reset, no redirigir a la app
-          document.getElementById('view-auth').style.display  = 'block';
-          document.getElementById('view-admin').style.display = 'none';
-          document.getElementById('view-user').style.display  = 'none';
-        }
-      });
-      return; // No continuar con el flujo normal
+      // NO registrar segundo listener, solo este único:
     }
 
-    // ── Flujo normal ──
-    const { data: { session } } = await supabase.auth.getSession();
-    await updateUserState(session?.user || null);
-
+    // ÚNICO listener para toda la app
     supabase.auth.onAuthStateChange(async (event, s) => {
       if (event === 'PASSWORD_RECOVERY') {
+        document.getElementById('view-auth').style.display = 'block';
         document.getElementById('view-admin').style.display = 'none';
-        document.getElementById('view-user').style.display  = 'none';
-        document.getElementById('view-auth').style.display  = 'block';
+        document.getElementById('view-user').style.display = 'none';
         ['auth-login-form','auth-register-form','auth-forgot-form'].forEach(id =>
-          document.getElementById(id).classList.add('hidden')
-        );
+          document.getElementById(id).classList.add('hidden'));
         document.getElementById('auth-reset-form').classList.remove('hidden');
         lucide.createIcons();
         return;
       }
+      // Para cualquier otro evento (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED...)
+      // solo actuar si el panel reset NO está visible
       const resetForm = document.getElementById('auth-reset-form');
       if (!resetForm.classList.contains('hidden')) return;
-      await updateUserState(s?.user || null);
+      await updateUserState(s?.user ?? null);
     });
 
-  } catch(e) { console.error(e); }
-  finally { document.getElementById('loading').classList.add('hidden'); }
+    if (!isRecovery) {
+      const { data: { session } } = await supabase.auth.getSession();
+      await updateUserState(session?.user ?? null);
+    }
+
+  } catch(e) {
+    console.error(e);
+  } finally {
+    document.getElementById('loading').classList.add('hidden');
+  }
 }
+	
 
 
 async function updateUserState(user) {
