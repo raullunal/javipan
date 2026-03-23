@@ -608,11 +608,11 @@ async function init() {
   const hash       = window.location.hash;
   const isRecovery = hash.includes('type=recovery');
 
-  // Safety net: si todo cuelga, ocultar loading a los 5s
+  // Safety net: si todo cuelga, ocultar loading a los 2.5s
   const safetyTimer = setTimeout(() => {
     hideLoading();
     if (!isRecovery) updateUserState(null);
-  }, 5000);
+  }, 2500);
 
   try {
     if (isRecovery) {
