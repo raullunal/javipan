@@ -13,7 +13,7 @@
 }
 .dark {
   /* Fondo y primer plano */
-  --bg:#18100D; --fg:#F5EBE0;
+  --bg:#271E18; --fg:#F5EBE0;
   --card-bg:rgba(30,20,15,0.97); --card-border:#5C3D2E;
   --input-bg:#2A1C16; --input-fg:#F5EBE0;
   --dot-color:#251810;
